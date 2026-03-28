@@ -1,18 +1,13 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
-import type { UseCaseCreate, UseCase, Agent, SpecConfig, AgentConfig, InteractionAsk, InteractionProvides } from "../types";
+import type { UseCase, Agent, SpecConfig, AgentConfig, InteractionAsk, InteractionProvides } from "../types";
 import {
   useAgent, useAgents, useUseCases, useInteractions,
-  useCreateUseCase, useDeleteUseCase, useDeleteAgent,
+  useDeleteUseCase, useDeleteAgent,
   useSetApiKey, useUploadSpec, useTestConnection, useGenerateSpec,
   useSaveAgentConfig, useSaveInteractions,
 } from "./queries";
 import { listUseCases } from "./api";
-
-const EMPTY_UC: UseCaseCreate = {
-  name: "", description: "", trigger_text: "", user_input: "",
-  expected_output: "", frequency: "", is_write: false, priority: "medium",
-};
 
 // --- Auto-sizing textarea ---
 
@@ -84,7 +79,6 @@ export default function AgentDetail() {
   const { data: allAgentsList = [] } = useAgents();
   const { data: interactions } = useInteractions(id!);
 
-  const createUc = useCreateUseCase();
   const deleteUc = useDeleteUseCase();
   const deleteAg = useDeleteAgent();
   const setApiKey = useSetApiKey();
@@ -97,8 +91,6 @@ export default function AgentDetail() {
   const allAgents = allAgentsList.filter((s) => s.id !== id);
 
   // Forms
-  const [showUcForm, setShowUcForm] = useState(false);
-  const [ucForm, setUcForm] = useState<UseCaseCreate>({ ...EMPTY_UC });
   const [apiKeyInput, setApiKeyInput] = useState("");
   const [specInput, setSpecInput] = useState("");
   const [saved, setSaved] = useState(false);
@@ -209,13 +201,6 @@ export default function AgentDetail() {
   const isSaving = saveConfig.isPending || saveInteractionsMut.isPending;
 
   // --- Other handlers ---
-
-  const handleCreateUc = async (e: React.FormEvent) => {
-    e.preventDefault();
-    await createUc.mutateAsync({ agentId: id!, data: ucForm });
-    setUcForm({ ...EMPTY_UC });
-    setShowUcForm(false);
-  };
 
   const handleUploadSpec = async () => {
     try {
@@ -463,30 +448,8 @@ export default function AgentDetail() {
       <div>
         <div className="flex items-center justify-between mb-3">
           <h3 className="font-semibold text-text-primary">Use Cases ({useCases.length})</h3>
-          <button className={btnPrimary} onClick={() => setShowUcForm(!showUcForm)}>+ Add Use Case</button>
+          <Link to={`/workbench/agents/${id}/usecases/new`} className={btnPrimary}>+ Add Use Case</Link>
         </div>
-        {showUcForm && (
-          <form className="bg-white rounded-xl shadow-sm border border-gray-100 p-5 mb-3 space-y-3" onSubmit={handleCreateUc}>
-            <input className={inp} placeholder="Use case name *" required value={ucForm.name} onChange={(e) => setUcForm({ ...ucForm, name: e.target.value })} />
-            <input className={inp} placeholder="Description" value={ucForm.description} onChange={(e) => setUcForm({ ...ucForm, description: e.target.value })} />
-            <textarea className={inp} placeholder="Trigger — what triggers this?" rows={2} value={ucForm.trigger_text} onChange={(e) => setUcForm({ ...ucForm, trigger_text: e.target.value })} />
-            <textarea className={inp} placeholder="User input — what does the user provide?" rows={2} value={ucForm.user_input} onChange={(e) => setUcForm({ ...ucForm, user_input: e.target.value })} />
-            <textarea className={inp} placeholder="Expected output — what should the response contain?" rows={2} value={ucForm.expected_output} onChange={(e) => setUcForm({ ...ucForm, expected_output: e.target.value })} />
-            <div className="flex gap-3 items-center">
-              <input className={`${inp} flex-1`} placeholder="Frequency (e.g. ~200/day)" value={ucForm.frequency} onChange={(e) => setUcForm({ ...ucForm, frequency: e.target.value })} />
-              <select className={`${inp} w-32`} value={ucForm.priority} onChange={(e) => setUcForm({ ...ucForm, priority: e.target.value })}>
-                <option value="high">High</option><option value="medium">Medium</option><option value="low">Low</option>
-              </select>
-              <label className="flex items-center gap-1.5 text-sm text-gray-600 whitespace-nowrap">
-                <input type="checkbox" checked={ucForm.is_write} onChange={(e) => setUcForm({ ...ucForm, is_write: e.target.checked })} /> Write operation
-              </label>
-            </div>
-            <div className="flex gap-2">
-              <button type="submit" className={btnPrimary} disabled={createUc.isPending}>Create</button>
-              <button type="button" className={btnSecondary} onClick={() => setShowUcForm(false)}>Cancel</button>
-            </div>
-          </form>
-        )}
         <div className="space-y-2">
           {useCases.map((uc) => (
             <div key={uc.id} className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">

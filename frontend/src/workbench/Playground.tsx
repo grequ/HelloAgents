@@ -1,9 +1,8 @@
-import { useState, useEffect, useRef, useCallback, type RefObject } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import type { Endpoint } from "../types";
-import { useAgent, useUseCase, useDiscover, useRunTest, useSaveDiscovery, useDeleteUseCase } from "./queries";
-import { getUseCase as fetchUseCase } from "./api";
-import { btnPrimary, btnDanger, btnSuccess, btnGhost, btnGhostDanger, inp } from "./ui";
+import type { Endpoint, UseCaseCreate } from "../types";
+import { useAgent, useUseCase, useDiscover, useRunTest, useSaveDiscovery, useDeleteUseCase, useCreateUseCase } from "./queries";
+import { btnPrimary, btnSecondary, btnDanger, btnSuccess, btnGhost, btnGhostDanger, inp } from "./ui";
 
 function AutoTextarea({ value, onChange, placeholder, className }: {
   value: string; onChange: (v: string) => void; placeholder?: string; className?: string;
@@ -36,16 +35,98 @@ function guessTestInput(userInput?: string): string {
   return JSON.stringify(obj, null, 2);
 }
 
+const EMPTY_UC: UseCaseCreate = {
+  name: "", description: "", trigger_text: "", user_input: "",
+  expected_output: "", frequency: "", is_write: false, priority: "medium",
+};
+
+function NewUseCaseForm({ agentId }: { agentId: string }) {
+  const nav = useNavigate();
+  const createUc = useCreateUseCase();
+  const [form, setForm] = useState<UseCaseCreate>({ ...EMPTY_UC });
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      const uc = await createUc.mutateAsync({ agentId, data: form });
+      nav(`/workbench/agents/${agentId}/usecases/${uc.id}`, { replace: true });
+    } catch (err: unknown) {
+      alert("Failed to create: " + (err instanceof Error ? err.message : "Unknown error"));
+    }
+  };
+
+  return (
+    <div className="max-w-3xl mx-auto">
+      <div className="flex items-start justify-between mb-5">
+        <h2 className="text-xl font-bold text-text-primary">New Use Case</h2>
+      </div>
+      <form className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 space-y-4" onSubmit={handleSubmit}>
+        <div>
+          <label className="block text-xs text-gray-500 mb-1">Use Case Name *</label>
+          <input className={inp} required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="e.g. Browse products by category" />
+        </div>
+        <div>
+          <label className="block text-xs text-gray-500 mb-1">Description</label>
+          <input className={inp} value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} placeholder="Short summary of what this use case does" />
+        </div>
+        <div>
+          <label className="block text-xs text-gray-500 mb-1">Trigger</label>
+          <textarea className={inp} rows={2} value={form.trigger_text} onChange={(e) => setForm({ ...form, trigger_text: e.target.value })} placeholder="What question or event triggers this? e.g. 'Customer asks to see laptops'" />
+        </div>
+        <div>
+          <label className="block text-xs text-gray-500 mb-1">User Provides</label>
+          <textarea className={inp} rows={2} value={form.user_input} onChange={(e) => setForm({ ...form, user_input: e.target.value })} placeholder="What information does the user/agent provide? e.g. 'Category name or product ID'" />
+        </div>
+        <div>
+          <label className="block text-xs text-gray-500 mb-1">Expected Output</label>
+          <textarea className={inp} rows={2} value={form.expected_output} onChange={(e) => setForm({ ...form, expected_output: e.target.value })} placeholder="What should the response contain? e.g. 'List of products with name, price, image'" />
+        </div>
+        <div className="grid grid-cols-3 gap-3">
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">Frequency</label>
+            <input className={inp} value={form.frequency} onChange={(e) => setForm({ ...form, frequency: e.target.value })} placeholder="e.g. ~200/day" />
+          </div>
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">Priority</label>
+            <select className={inp} value={form.priority} onChange={(e) => setForm({ ...form, priority: e.target.value })}>
+              <option value="high">High</option><option value="medium">Medium</option><option value="low">Low</option>
+            </select>
+          </div>
+          <div className="flex items-end pb-2">
+            <label className="flex items-center gap-1.5 text-sm text-gray-600">
+              <input type="checkbox" checked={form.is_write} onChange={(e) => setForm({ ...form, is_write: e.target.checked })} />
+              Write operation
+            </label>
+          </div>
+        </div>
+        <div className="flex gap-2 pt-2">
+          <button type="submit" className={btnPrimary} disabled={createUc.isPending || !form.name.trim()}>
+            {createUc.isPending ? "Creating..." : "Create Use Case"}
+          </button>
+          <button type="button" className={btnSecondary} onClick={() => nav(`/workbench/agents/${agentId}`)}>Cancel</button>
+        </div>
+      </form>
+    </div>
+  );
+}
+
 export default function Playground() {
   const { id: agentId, ucId } = useParams<{ id: string; ucId: string }>();
   const nav = useNavigate();
+  const isNew = ucId === "new";
   const { data: agent } = useAgent(agentId!);
-  const { data: uc, refetch: refetchUc } = useUseCase(ucId!);
+  const { data: uc, refetch: refetchUc } = useUseCase(isNew ? "" : ucId!);
 
   const discoverMut = useDiscover();
   const runTestMut = useRunTest();
   const saveDiscMut = useSaveDiscovery();
   const deleteUcMut = useDeleteUseCase();
+
+  // If creating a new use case, show the form
+  if (isNew) {
+    if (!agent) return <p className="text-sm text-gray-500">Loading...</p>;
+    return <NewUseCaseForm agentId={agentId!} />;
+  }
 
   // Editable discovery state
   const [endpoints, setEndpoints] = useState<Endpoint[]>([]);
