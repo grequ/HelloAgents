@@ -16,6 +16,7 @@ export interface Agent {
   has_api_key: boolean;
   has_api_spec: boolean;
   api_spec_endpoint_count?: number;
+  api_endpoints?: { method: string; path: string; summary: string }[];
   status: string;
   use_case_count?: number;
   created_at?: string;

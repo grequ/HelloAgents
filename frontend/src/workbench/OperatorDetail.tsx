@@ -245,6 +245,30 @@ export default function OperatorDetail() {
                 </div>
               )}
             </div>
+
+            {/* Endpoint list */}
+            {agent.api_endpoints && agent.api_endpoints.length > 0 && (
+              <div className="mt-4 pt-4 border-t border-gray-100">
+                <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
+                  {isMcp ? "MCP Tools" : "API Endpoints"} ({agent.api_endpoints.length})
+                </h4>
+                <div className="space-y-1 max-h-[300px] overflow-y-auto">
+                  {agent.api_endpoints.map((ep, i) => (
+                    <div key={i} className="flex items-baseline gap-2 text-xs">
+                      <span className={`font-mono font-semibold px-1.5 py-0.5 rounded text-[10px] ${
+                        ep.method === "GET" ? "bg-green-100 text-green-700" :
+                        ep.method === "POST" ? "bg-blue-100 text-blue-700" :
+                        ep.method === "PUT" ? "bg-amber-100 text-amber-700" :
+                        ep.method === "DELETE" ? "bg-red-100 text-red-700" :
+                        "bg-gray-100 text-gray-700"
+                      }`}>{ep.method}</span>
+                      <span className="font-mono text-text-primary">{ep.path}</span>
+                      {ep.summary && <span className="text-gray-400 truncate">{ep.summary}</span>}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </>);
         })()}
       </div>

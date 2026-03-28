@@ -50,6 +50,7 @@ class AgentOut(BaseModel):
     has_api_key: bool = False
     has_api_spec: bool = False
     api_spec_endpoint_count: int = 0
+    api_endpoints: list = []
     status: str
     use_case_count: int = 0
     created_at: datetime | None = None
