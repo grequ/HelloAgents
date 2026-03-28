@@ -7,6 +7,7 @@ import {
   useSetApiKey, useUploadSpec, useTestConnection, useGenerateSpec,
   useSaveAgentConfig,
 } from "./queries";
+import { fetchUrl } from "./api";
 import { btnPrimary, btnSecondary, btnDanger, btnGhost, btnGhostDanger, btnGhostCyan, inp } from "./ui";
 
 // --- Auto-sizing textarea ---
@@ -134,17 +135,15 @@ export default function OperatorDetail() {
     const input = specInput.trim();
     if (!input) return;
 
-    // URL → fetch the swagger.json from the server
+    // URL → fetch via backend (avoids CORS)
     if (input.startsWith("http://") || input.startsWith("https://")) {
       setSpecLoading(true);
       try {
-        const resp = await fetch(input);
-        if (!resp.ok) { alert(`Failed to fetch: ${resp.status} ${resp.statusText}`); setSpecLoading(false); return; }
-        const spec = await resp.json();
+        const spec = await fetchUrl(input);
         await uploadSpec.mutateAsync({ id: id!, spec });
         setSpecInput("");
       } catch (e: unknown) {
-        alert("Failed to fetch or parse JSON from URL: " + (e instanceof Error ? e.message : "Unknown error"));
+        alert("Failed to fetch spec from URL: " + (e instanceof Error ? e.message : "Unknown error"));
       } finally {
         setSpecLoading(false);
       }

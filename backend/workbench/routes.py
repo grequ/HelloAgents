@@ -163,6 +163,24 @@ async def test_url(body: dict):
         return {"ok": False, "error": str(e)}
 
 
+@router.post("/fetch-url")
+async def fetch_url(body: dict):
+    """Fetch a URL server-side and return its JSON content."""
+    url = body.get("url", "")
+    if not url:
+        raise HTTPException(400, "url is required")
+    import httpx
+    try:
+        async with httpx.AsyncClient(timeout=30.0, follow_redirects=True) as http:
+            resp = await http.get(url)
+        if resp.status_code != 200:
+            raise HTTPException(400, f"HTTP {resp.status_code} from {url}")
+        return resp.json()
+    except json.JSONDecodeError:
+        raise HTTPException(400, "URL did not return valid JSON")
+    except httpx.HTTPError as e:
+        raise HTTPException(400, f"Failed to fetch URL: {e}")
+
 
 # ---- Use Cases CRUD ----
 

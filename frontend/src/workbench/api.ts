@@ -72,6 +72,10 @@ export async function testAgentConnection(id: string): Promise<ConnectionResult>
   return request<ConnectionResult>("POST", `/agents/${id}/test-connection`);
 }
 
+export async function fetchUrl(url: string): Promise<Record<string, unknown>> {
+  return request<Record<string, unknown>>("POST", "/fetch-url", { url });
+}
+
 export async function testUrl(url: string, apiKey: string, authType: string): Promise<ConnectionResult> {
   return request<ConnectionResult>("POST", "/test-url", { url, api_key: apiKey, auth_type: authType });
 }
