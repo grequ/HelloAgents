@@ -138,40 +138,28 @@ export default function OperatorDetail() {
     const lines = input.split("\n").map((l) => l.trim()).filter(Boolean);
     const urls = lines.filter((l) => l.startsWith("http://") || l.startsWith("https://"));
 
-    // Case 1: All lines are URLs → try direct fetch first, fallback to AI generation
+    // Case 1: All lines are URLs
     if (urls.length > 0 && urls.length === lines.length) {
       setSpecLoading(true);
 
-      // If single URL, try direct fetch + common paths first
-      if (urls.length === 1) {
-        const baseUrl = urls[0].replace(/\/+$/, "");
-        const urlsToTry = [
-          baseUrl,
-          ...(baseUrl.endsWith(".json") || baseUrl.endsWith(".yaml") ? [] : [
-            `${baseUrl}/openapi.json`, `${baseUrl}/swagger.json`, `${baseUrl}/api-docs`,
-          ]),
-        ];
-        for (const url of urlsToTry) {
-          try {
-            const resp = await fetch(url);
-            if (!resp.ok) continue;
-            const ct = resp.headers.get("content-type") || "";
-            if (!ct.includes("json")) continue;
-            const spec = await resp.json();
-            if (spec && (spec.openapi || spec.swagger || spec.paths)) {
-              await uploadSpec.mutateAsync({ id: id!, spec });
-              setSpecInput("");
-              setSpecLoading(false);
-              return;
-            }
-          } catch { /* try next */ }
-        }
+      // Single URL ending in .json → try direct server-side fetch first
+      if (urls.length === 1 && (urls[0].endsWith(".json") || urls[0].endsWith(".yaml"))) {
+        try {
+          // Use backend to fetch (avoids CORS)
+          const spec = await generateSpecFromDocs(urls, agent?.name || "", agent?.api_base_url || "");
+          if (spec && (spec.openapi || spec.swagger || spec.paths)) {
+            await uploadSpec.mutateAsync({ id: id!, spec });
+            setSpecInput("");
+            setSpecLoading(false);
+            return;
+          }
+        } catch { /* fall through to AI generation */ }
       }
 
-      // No direct spec found — use AI to analyze docs pages and generate spec
+      // Send all URLs to backend — fetches pages server-side, AI generates spec
       try {
         const spec = await generateSpecFromDocs(urls, agent?.name || "", agent?.api_base_url || "");
-        if (spec && (spec.openapi || spec.paths)) {
+        if (spec && (spec.openapi || spec.swagger || spec.paths)) {
           await uploadSpec.mutateAsync({ id: id!, spec });
           setSpecInput("");
         } else {

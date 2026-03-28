@@ -177,20 +177,25 @@ async def generate_spec_from_docs(body: dict):
     import os
     import re
 
-    # Fetch content from each URL
+    # Fetch content from each URL (with browser-like User-Agent to avoid blocks)
     docs_content = []
-    async with httpx.AsyncClient(timeout=30.0, follow_redirects=True) as http:
+    headers = {"User-Agent": "Mozilla/5.0 (compatible; AgentForge/2.0)"}
+    async with httpx.AsyncClient(timeout=30.0, follow_redirects=True, headers=headers) as http:
         for url in urls[:10]:  # Max 10 URLs
             try:
                 resp = await http.get(url)
                 if resp.status_code == 200:
                     text = resp.text[:30000]  # Limit per page
                     docs_content.append(f"## Source: {url}\n\n{text}")
+                else:
+                    docs_content.append(f"## Source: {url}\n\nHTTP {resp.status_code}")
             except Exception as e:
                 docs_content.append(f"## Source: {url}\n\nFailed to fetch: {e}")
 
-    if not docs_content:
-        raise HTTPException(400, "Could not fetch any of the provided URLs")
+    successful = [d for d in docs_content if "Failed to fetch:" not in d and "HTTP 4" not in d and "HTTP 5" not in d]
+    if not successful:
+        details = "\n".join(docs_content) if docs_content else "No URLs processed"
+        raise HTTPException(400, f"Could not fetch any of the provided URLs. Details:\n{details}")
 
     combined_docs = "\n\n---\n\n".join(docs_content)
 
