@@ -235,7 +235,7 @@ export default function Playground() {
 
       <div className="grid grid-cols-[1fr_1.3fr] gap-5">
         {/* Left — Use Case Definition (editable) */}
-        <div className="space-y-4">
+        <div className="space-y-4 min-w-0">
           <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5 space-y-3">
             <h3 className="font-semibold text-text-primary text-sm">Use Case Definition</h3>
             <div>
@@ -326,7 +326,7 @@ export default function Playground() {
         </div>
 
         {/* Right — Discovery & Testing */}
-        <div className="space-y-4">
+        <div className="space-y-4 min-w-0">
           {isNew ? (
             <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-8 text-center">
               <p className="text-sm text-gray-500 mb-2">Save the use case first to unlock endpoint discovery and live testing.</p>
@@ -414,7 +414,7 @@ export default function Playground() {
                                 {String(step.status_code)} ({String(step.latency_ms)}ms)
                               </span>
                             </div>
-                            <pre className="text-[10px] font-mono bg-white/60 rounded p-2 overflow-x-auto max-h-24">
+                            <pre className="text-[10px] font-mono bg-white/60 rounded p-2 max-h-32 overflow-auto whitespace-pre-wrap break-all">
                               {JSON.stringify(step.response, null, 2)}
                             </pre>
                           </div>
