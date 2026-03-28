@@ -684,6 +684,52 @@ Review generated agent spec, edit, set cross-agent dependencies, export.
 └──────────────────────────────────────────────────────────────────┘
 ```
 
+#### Page 5: Agent Architecture Map
+
+**Route:** `/workbench/map`
+
+A visual, read-only map showing all generated agents, the tools (skills) each
+agent exposes, the systems they connect to, and how agents call each other.
+The goal is a high-level "at a glance" view so a human can understand the full
+agent architecture without reading individual specs.
+
+```
+┌────────────────────────────────────────────────────────────────┐
+│  Agent Architecture Map                                         │
+│                                                                  │
+│  ┌──────────────────┐        ┌──────────────────┐              │
+│  │ Logistics Agent   │───────►│ Support Orch.    │              │
+│  │                   │        │                   │              │
+│  │ Tools:            │        │ Tools:            │              │
+│  │ • track_package   │        │ • ask_logistics   │              │
+│  │ • check_inventory │        │ • ask_payment     │              │
+│  │                   │        │                   │              │
+│  │ Systems:          │        └──────────┬───────┘              │
+│  │ • SAP WMS         │                   │                      │
+│  │ • Carrier API     │        ┌──────────▼───────┐              │
+│  └──────────────────┘        │ Payment Agent     │              │
+│                               │                   │              │
+│                               │ Tools:            │              │
+│                               │ • initiate_refund │              │
+│                               │                   │              │
+│                               │ Systems:          │              │
+│                               │ • Stripe          │              │
+│                               └──────────────────┘              │
+│                                                                  │
+│  Click any agent card to open its spec detail page.             │
+└────────────────────────────────────────────────────────────────┘
+```
+
+**Data sources:**
+- Agent list + tools from `GET /workbench/specs`
+- System names from `GET /workbench/systems`
+- Connections from `depends_on` / `called_by` fields on each agent spec
+
+**Layout:** SVG canvas with agent cards as nodes, arrows showing call direction,
+tool names listed inside each card, linked system names below tools.
+
+---
+
 ### Frontend Routes
 
 ```
@@ -693,6 +739,7 @@ Review generated agent spec, edit, set cross-agent dependencies, export.
 /workbench/systems/:id/usecases/:ucId   Use case detail + playground
 /workbench/agents                       List generated agent specs
 /workbench/agents/:id                   Agent spec review + export
+/workbench/map                          Visual agent architecture map
 ```
 
 ### Self-Discovery Engine
@@ -913,7 +960,8 @@ HelloAgents/
 │           ├── SystemDetail.tsx # System info + use case list
 │           ├── Playground.tsx   # Use case detail + discovery + live test
 │           ├── AgentSpecList.tsx # List of generated specs
-│           └── AgentSpecView.tsx # Spec review + export
+│           ├── AgentSpecView.tsx # Spec review + export
+│           └── AgentMap.tsx     # Visual agent architecture map
 └── generator/
     ├── requirements.txt         # anthropic, pyyaml
     ├── generate_agent_spec.py   # CLI tool: use cases YAML + OpenAPI → agent spec

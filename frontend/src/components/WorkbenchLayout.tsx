@@ -10,12 +10,14 @@ const NAV_ITEMS = [
     links: [
       { to: "/workbench", label: "Dashboard", end: true },
       { to: "/workbench/agents", label: "Agent Specs" },
+      { to: "/workbench/map", label: "Map" },
     ],
   },
 ];
 
 function pageTitle(pathname: string): string {
   if (pathname === "/workbench") return "Dashboard";
+  if (pathname === "/workbench/map") return "Agent Architecture Map";
   if (pathname.includes("/agents")) return "Agent Specs";
   if (pathname.includes("/usecases")) return "Playground";
   if (pathname.includes("/systems")) return "System Detail";

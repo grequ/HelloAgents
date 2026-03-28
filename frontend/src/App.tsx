@@ -6,6 +6,7 @@ import SystemDetail from "./workbench/SystemDetail";
 import Playground from "./workbench/Playground";
 import AgentSpecList from "./workbench/AgentSpecList";
 import AgentSpecView from "./workbench/AgentSpecView";
+import AgentMap from "./workbench/AgentMap";
 
 function SpecRedirect() {
   const { specId } = useParams();
@@ -23,6 +24,7 @@ export default function App() {
           <Route path="/workbench/systems/:id/usecases/:ucId" element={<Playground />} />
           <Route path="/workbench/agents" element={<AgentSpecList />} />
           <Route path="/workbench/agents/:id" element={<AgentSpecView />} />
+          <Route path="/workbench/map" element={<AgentMap />} />
         </Route>
         {/* Redirects from old paths */}
         <Route path="/workbench/specs" element={<Navigate to="/workbench/agents" replace />} />
