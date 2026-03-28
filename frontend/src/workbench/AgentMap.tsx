@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import { Link } from "react-router-dom";
-import { useSpecs, useSystems, useAllInteractions } from "./queries";
-import type { AgentSpec, System } from "../types";
+import { useSpecs, useAgents, useAllInteractions } from "./queries";
+import type { AgentSpec, Agent } from "../types";
 import type { InteractionRow } from "./api";
 
 // --- Types ---
@@ -11,7 +11,7 @@ interface ToolDef { name: string; description?: string }
 interface AgentNode {
   spec: AgentSpec;
   tools: ToolDef[];
-  systemNames: string[];
+  agentNames: string[];
   x: number;
   y: number;
 }
@@ -28,14 +28,14 @@ const CARD_MIN_H = 120;
 const GAP_X = 120;
 const GAP_Y = 80;
 const TOOL_LINE_H = 20;
-const SYSTEM_LINE_H = 18;
+const AGENT_LINE_H = 18;
 const CARD_HEADER = 48;
 const CARD_PADDING_BOTTOM = 16;
 
 function cardHeight(node: AgentNode): number {
   const toolsH = Math.max(node.tools.length, 1) * TOOL_LINE_H;
-  const sysH = node.systemNames.length > 0 ? 20 + node.systemNames.length * SYSTEM_LINE_H : 0;
-  return Math.max(CARD_MIN_H, CARD_HEADER + toolsH + sysH + CARD_PADDING_BOTTOM);
+  const agH = node.agentNames.length > 0 ? 20 + node.agentNames.length * AGENT_LINE_H : 0;
+  return Math.max(CARD_MIN_H, CARD_HEADER + toolsH + agH + CARD_PADDING_BOTTOM);
 }
 
 function parseTools(toolsJson: unknown): ToolDef[] {
@@ -51,11 +51,11 @@ function buildEdges(
   specs: AgentSpec[],
   interactions: InteractionRow[],
 ): Edge[] {
-  // Map system_id → spec_id
-  const systemToSpec = new Map<string, string>();
+  // Map agent_id → spec_id
+  const agentToSpec = new Map<string, string>();
   for (const spec of specs) {
-    for (const sid of spec.system_ids || []) {
-      systemToSpec.set(sid, spec.id);
+    for (const aid of spec.agent_ids || []) {
+      agentToSpec.set(aid, spec.id);
     }
   }
 
@@ -63,8 +63,8 @@ function buildEdges(
   const seen = new Set<string>();
 
   for (const row of interactions) {
-    const fromSpec = systemToSpec.get(row.from_system_id);
-    const toSpec = systemToSpec.get(row.to_system_id);
+    const fromSpec = agentToSpec.get(row.from_agent_id);
+    const toSpec = agentToSpec.get(row.to_agent_id);
     if (fromSpec && toSpec && fromSpec !== toSpec) {
       const key = `${fromSpec}→${toSpec}`;
       if (!seen.has(key)) {
@@ -80,7 +80,7 @@ function buildEdges(
 
 function layoutNodes(
   specs: AgentSpec[],
-  systemsById: Record<string, System>,
+  agentsById: Record<string, Agent>,
   edges: Edge[],
 ): AgentNode[] {
   // Build adjacency for layering
@@ -131,8 +131,8 @@ function layoutNodes(
       const spec = specById[layer[i]];
       if (!spec) continue;
       const tools = parseTools(spec.tools_json);
-      const systemNames = (spec.system_ids || []).map((sid) => systemsById[sid]?.name).filter(Boolean) as string[];
-      const node: AgentNode = { spec, tools, systemNames, x: 40 + i * (CARD_W + GAP_X), y: currentY };
+      const agentNames = (spec.agent_ids || []).map((aid) => agentsById[aid]?.name).filter(Boolean) as string[];
+      const node: AgentNode = { spec, tools, agentNames, x: 40 + i * (CARD_W + GAP_X), y: currentY };
       nodes.push(node);
       maxH = Math.max(maxH, cardHeight(node));
     }
@@ -145,14 +145,14 @@ function layoutNodes(
 
 export default function AgentMap() {
   const { data: specs = [], isLoading: specsLoading } = useSpecs();
-  const { data: systems = [], isLoading: systemsLoading } = useSystems();
+  const { data: agents = [], isLoading: agentsLoading } = useAgents();
   const { data: interactions = [], isLoading: intLoading } = useAllInteractions();
 
-  const systemsById = useMemo(() => Object.fromEntries(systems.map((s) => [s.id, s])), [systems]);
+  const agentsById = useMemo(() => Object.fromEntries(agents.map((s) => [s.id, s])), [agents]);
   const edges = useMemo(() => buildEdges(specs, interactions), [specs, interactions]);
-  const nodes = useMemo(() => layoutNodes(specs, systemsById, edges), [specs, systemsById, edges]);
+  const nodes = useMemo(() => layoutNodes(specs, agentsById, edges), [specs, agentsById, edges]);
 
-  if (specsLoading || systemsLoading || intLoading) return <p className="text-sm text-gray-500">Loading...</p>;
+  if (specsLoading || agentsLoading || intLoading) return <p className="text-sm text-gray-500">Loading...</p>;
 
   if (specs.length === 0) {
     return (
@@ -160,7 +160,7 @@ export default function AgentMap() {
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-10 text-center">
           <div className="text-4xl mb-3 opacity-40">&#128506;</div>
           <h2 className="text-lg font-semibold text-text-primary mb-2">No agents to map yet</h2>
-          <p className="text-sm text-gray-500 mb-4">Generate agent specs from your systems first.</p>
+          <p className="text-sm text-gray-500 mb-4">Generate agent specs from your agents first.</p>
           <Link to="/workbench" className="px-4 py-2 rounded-lg bg-tedee-cyan text-tedee-navy font-semibold text-sm hover:bg-hover-cyan transition-colors inline-block">
             Go to Dashboard
           </Link>
@@ -248,7 +248,7 @@ export default function AgentMap() {
                 <rect x={node.x + 1} y={node.y + 1} width={CARD_W - 2} height={5} rx={2} fill="#34CFFD" />
 
                 {/* Agent name */}
-                <a href={`/workbench/agents/${node.spec.id}`}>
+                <a href={`/workbench/specs/${node.spec.id}`}>
                   <text x={node.x + 16} y={node.y + 30} fontSize={14} fontWeight={700} fill="#22345A">
                     {nameText}
                   </text>
@@ -278,13 +278,13 @@ export default function AgentMap() {
                   </text>
                 )}
 
-                {/* Systems */}
-                {node.systemNames.length > 0 && (() => {
-                  const sysY = node.y + CARD_HEADER + 16 + Math.max(node.tools.length, 1) * TOOL_LINE_H + 8;
+                {/* Agents */}
+                {node.agentNames.length > 0 && (() => {
+                  const agY = node.y + CARD_HEADER + 16 + Math.max(node.tools.length, 1) * TOOL_LINE_H + 8;
                   return (<>
-                    <text x={node.x + 16} y={sysY} fontSize={10} fill="#A9A9A9" fontWeight={600} letterSpacing="0.05em">SYSTEMS</text>
-                    {node.systemNames.map((name, si) => (
-                      <text key={si} x={node.x + 16} y={sysY + 14 + si * SYSTEM_LINE_H} fontSize={11} fill="#64748b">{name}</text>
+                    <text x={node.x + 16} y={agY} fontSize={10} fill="#A9A9A9" fontWeight={600} letterSpacing="0.05em">AGENTS</text>
+                    {node.agentNames.map((name, si) => (
+                      <text key={si} x={node.x + 16} y={agY + 14 + si * AGENT_LINE_H} fontSize={11} fill="#64748b">{name}</text>
                     ))}
                   </>);
                 })()}

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import type { SystemCreate } from "../types";
-import { useDashboard, useCreateSystem, useSeedDemoData } from "./queries";
+import type { AgentCreate } from "../types";
+import { useDashboard, useCreateAgent, useSeedDemoData } from "./queries";
 
 const STATUS_COLORS: Record<string, string> = {
   inventoried: "bg-gray-200 text-gray-700",
@@ -11,29 +11,29 @@ const STATUS_COLORS: Record<string, string> = {
   spec_generated: "bg-emerald-100 text-emerald-700",
 };
 
-const EMPTY_FORM: SystemCreate = {
+const EMPTY_FORM: AgentCreate = {
   name: "", description: "", category: "", owner_team: "", api_type: "rest", api_base_url: "",
 };
 
 export default function Dashboard() {
   const { data, isLoading } = useDashboard();
-  const createSystem = useCreateSystem();
+  const createAgent = useCreateAgent();
   const seedDemo = useSeedDemoData();
   const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState<SystemCreate>({ ...EMPTY_FORM });
+  const [form, setForm] = useState<AgentCreate>({ ...EMPTY_FORM });
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
-    await createSystem.mutateAsync(form);
+    await createAgent.mutateAsync(form);
     setForm({ ...EMPTY_FORM });
     setShowForm(false);
   };
 
   if (isLoading) return <p className="p-6 text-sm text-gray-500">Loading...</p>;
 
-  const systems = data?.systems || [];
-  const stats = data?.stats || { systems: {}, use_cases: {}, specs_total: 0 };
-  const sysTotal = Object.values(stats.systems).reduce((a, b) => a + b, 0);
+  const agents = data?.agents || [];
+  const stats = data?.stats || { agents: {}, use_cases: {}, specs_total: 0 };
+  const agentTotal = Object.values(stats.agents).reduce((a, b) => a + b, 0);
   const ucTotal = Object.values(stats.use_cases).reduce((a, b) => a + b, 0);
 
   return (
@@ -41,7 +41,7 @@ export default function Dashboard() {
       {/* Stats */}
       <div className="grid grid-cols-3 gap-4 mb-6">
         {[
-          { label: "Systems", value: sysTotal },
+          { label: "Agents", value: agentTotal },
           { label: "Use Cases", value: ucTotal },
           { label: "Agent Specs", value: stats.specs_total },
         ].map((s) => (
@@ -52,14 +52,14 @@ export default function Dashboard() {
         ))}
       </div>
 
-      {/* Systems section */}
+      {/* Agents section */}
       <div className="flex items-center justify-between mb-4">
-        <h2 className="text-lg font-semibold text-text-primary">Systems</h2>
+        <h2 className="text-lg font-semibold text-text-primary">Agents</h2>
         <button
           className="px-4 py-2 rounded-lg bg-tedee-cyan text-tedee-navy font-semibold text-sm hover:bg-hover-cyan transition-colors"
           onClick={() => setShowForm(!showForm)}
         >
-          + Add System
+          + Add Agent
         </button>
       </div>
 
@@ -68,7 +68,7 @@ export default function Dashboard() {
           <div className="grid grid-cols-2 gap-3">
             <input
               className="rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-tedee-cyan"
-              placeholder="System name *" required value={form.name}
+              placeholder="Agent name *" required value={form.name}
               onChange={(e) => setForm({ ...form, name: e.target.value })}
             />
             <input
@@ -106,8 +106,8 @@ export default function Dashboard() {
             onChange={(e) => setForm({ ...form, api_base_url: e.target.value })}
           />
           <div className="flex gap-2">
-            <button type="submit" className="px-4 py-2 rounded-lg bg-tedee-cyan text-tedee-navy font-semibold text-sm hover:bg-hover-cyan" disabled={createSystem.isPending}>
-              {createSystem.isPending ? "Creating..." : "Create"}
+            <button type="submit" className="px-4 py-2 rounded-lg bg-tedee-cyan text-tedee-navy font-semibold text-sm hover:bg-hover-cyan" disabled={createAgent.isPending}>
+              {createAgent.isPending ? "Creating..." : "Create"}
             </button>
             <button type="button" className="px-4 py-2 rounded-lg border border-gray-200 text-gray-600 text-sm hover:bg-gray-100" onClick={() => setShowForm(false)}>
               Cancel
@@ -117,9 +117,9 @@ export default function Dashboard() {
       )}
 
       <div className="grid grid-cols-[repeat(auto-fill,minmax(300px,1fr))] gap-3">
-        {systems.map((s) => (
+        {agents.map((s) => (
           <Link
-            to={`/workbench/systems/${s.id}`}
+            to={`/workbench/agents/${s.id}`}
             key={s.id}
             className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 block no-underline hover:shadow-md transition-shadow"
           >
@@ -140,9 +140,9 @@ export default function Dashboard() {
         ))}
       </div>
 
-      {systems.length === 0 && (
+      {agents.length === 0 && (
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-8 text-center">
-          <p className="text-sm text-gray-500 mb-3">No systems yet. Start by seeding demo data or add systems manually.</p>
+          <p className="text-sm text-gray-500 mb-3">No agents yet. Start by seeding demo data or add agents manually.</p>
           <button
             className="px-4 py-2 rounded-lg bg-tedee-cyan text-tedee-navy font-semibold text-sm hover:bg-hover-cyan disabled:opacity-50"
             onClick={() => seedDemo.mutate()}
@@ -151,7 +151,7 @@ export default function Dashboard() {
             {seedDemo.isPending ? "Loading..." : "Load Demo Data (DummyJSON APIs)"}
           </button>
           <p className="text-xs text-gray-400 mt-2">
-            Creates 3 systems with 12 prefilled use cases using real public APIs you can test immediately.
+            Creates 3 agents with 12 prefilled use cases using real public APIs you can test immediately.
           </p>
         </div>
       )}

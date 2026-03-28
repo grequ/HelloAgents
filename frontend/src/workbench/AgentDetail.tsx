@@ -1,9 +1,9 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
-import type { UseCaseCreate, UseCase, System, SpecConfig, AgentConfig, InteractionAsk, InteractionProvides } from "../types";
+import type { UseCaseCreate, UseCase, Agent, SpecConfig, AgentConfig, InteractionAsk, InteractionProvides } from "../types";
 import {
-  useSystem, useSystems, useUseCases, useInteractions,
-  useCreateUseCase, useDeleteUseCase, useDeleteSystem,
+  useAgent, useAgents, useUseCases, useInteractions,
+  useCreateUseCase, useDeleteUseCase, useDeleteAgent,
   useSetApiKey, useUploadSpec, useTestConnection, useGenerateSpec,
   useSaveAgentConfig, useSaveInteractions,
 } from "./queries";
@@ -34,12 +34,12 @@ function AutoTextarea({ value, onChange, placeholder, className }: {
 
 // --- Generators ---
 
-function generateAdditionalContext(sys: System, ucs: UseCase[]): string {
+function generateAdditionalContext(agent: Agent, ucs: UseCase[]): string {
   const lines: string[] = [];
-  if (sys.api_base_url) lines.push(`API Base URL: ${sys.api_base_url}`);
-  if (sys.api_auth_type && sys.api_auth_type !== "none") lines.push(`Authentication: ${sys.api_auth_type}`);
-  if (sys.has_api_spec) lines.push(`OpenAPI spec loaded with ${sys.api_spec_endpoint_count ?? "unknown number of"} endpoints.`);
-  if (sys.api_docs_url) lines.push(`API docs: ${sys.api_docs_url}`);
+  if (agent.api_base_url) lines.push(`API Base URL: ${agent.api_base_url}`);
+  if (agent.api_auth_type && agent.api_auth_type !== "none") lines.push(`Authentication: ${agent.api_auth_type}`);
+  if (agent.has_api_spec) lines.push(`OpenAPI spec loaded with ${agent.api_spec_endpoint_count ?? "unknown number of"} endpoints.`);
+  if (agent.api_docs_url) lines.push(`API docs: ${agent.api_docs_url}`);
   const tested = ucs.filter((u) => u.status === "tested");
   const discovered = ucs.filter((u) => u.status === "discovered" || u.status === "tested");
   if (tested.length > 0) lines.push(`\n${tested.length} of ${ucs.length} use cases have been live-tested.`);
@@ -57,13 +57,13 @@ function generateAdditionalContext(sys: System, ucs: UseCase[]): string {
   return lines.join("\n");
 }
 
-function generateRoleFromUseCases(sys: System, ucs: UseCase[]): string {
-  const domain = sys.category || "general";
+function generateRoleFromUseCases(agent: Agent, ucs: UseCase[]): string {
+  const domain = agent.category || "general";
   const readUcs = ucs.filter((u) => !u.is_write);
   const writeUcs = ucs.filter((u) => u.is_write);
   const highPri = ucs.filter((u) => u.priority === "high");
-  let role = `You are the ${sys.name} Agent, a specialized AI assistant responsible for the ${domain} domain. `;
-  role += `You have access to the ${sys.name} system via its ${sys.api_type?.toUpperCase() || "REST"} API. `;
+  let role = `You are the ${agent.name} Agent, a specialized AI assistant responsible for the ${domain} domain. `;
+  role += `You have access to the ${agent.name} system via its ${agent.api_type?.toUpperCase() || "REST"} API. `;
   if (readUcs.length > 0) role += `\n\nYour primary read operations include: ${readUcs.map((u) => u.name.toLowerCase()).join(", ")}. `;
   if (writeUcs.length > 0) role += `Your write operations include: ${writeUcs.map((u) => u.name.toLowerCase()).join(", ")}. Write operations require explicit user confirmation. `;
   role += `\n\nBehavior guidelines:\n- Always use ONLY data from tool results. Never fabricate information.\n- Be concise and factual.\n- If a tool call fails, explain what happened and suggest alternatives.\n- If the request is outside your domain, say so clearly.\n`;
@@ -76,17 +76,17 @@ import { btnPrimary, btnSecondary, btnDanger, btnGhost as btnGhostDefault, btnGh
 
 // --- Component ---
 
-export default function SystemDetail() {
+export default function AgentDetail() {
   const { id } = useParams<{ id: string }>();
   const nav = useNavigate();
-  const { data: system, isLoading: sysLoading } = useSystem(id!);
+  const { data: agent, isLoading: agentLoading } = useAgent(id!);
   const { data: useCases = [], isLoading: ucLoading } = useUseCases(id!);
-  const { data: allSystemsList = [] } = useSystems();
+  const { data: allAgentsList = [] } = useAgents();
   const { data: interactions } = useInteractions(id!);
 
   const createUc = useCreateUseCase();
   const deleteUc = useDeleteUseCase();
-  const deleteSys = useDeleteSystem();
+  const deleteAg = useDeleteAgent();
   const setApiKey = useSetApiKey();
   const uploadSpec = useUploadSpec();
   const testConn = useTestConnection();
@@ -94,7 +94,7 @@ export default function SystemDetail() {
   const saveConfig = useSaveAgentConfig();
   const saveInteractionsMut = useSaveInteractions();
 
-  const allSystems = allSystemsList.filter((s) => s.id !== id);
+  const allAgents = allAgentsList.filter((s) => s.id !== id);
 
   // Forms
   const [showUcForm, setShowUcForm] = useState(false);
@@ -116,27 +116,27 @@ export default function SystemDetail() {
   const [asksAgents, setAsksAgents] = useState<InteractionAsk[]>([]);
   const [providesToAgents, setProvidesToAgents] = useState<InteractionProvides[]>([]);
   const [interactionsLoaded, setInteractionsLoaded] = useState(false);
-  const [allUseCasesBySystem, setAllUseCasesBySystem] = useState<Record<string, UseCase[]>>({});
+  const [allUseCasesByAgent, setAllUseCasesByAgent] = useState<Record<string, UseCase[]>>({});
 
-  // Load use cases for other systems
+  // Load use cases for other agents
   useEffect(() => {
     async function loadOtherUcs() {
       const ucMap: Record<string, UseCase[]> = {};
-      for (const sys of allSystems) {
-        try { ucMap[sys.id] = await listUseCases(sys.id); } catch { ucMap[sys.id] = []; }
+      for (const ag of allAgents) {
+        try { ucMap[ag.id] = await listUseCases(ag.id); } catch { ucMap[ag.id] = []; }
       }
-      setAllUseCasesBySystem(ucMap);
+      setAllUseCasesByAgent(ucMap);
     }
-    if (allSystems.length > 0) loadOtherUcs();
-  }, [allSystemsList.length]);
+    if (allAgents.length > 0) loadOtherUcs();
+  }, [allAgentsList.length]);
 
   // Load config from DB or generate defaults
   useEffect(() => {
-    if (!system || configLoaded) return;
-    const c = system.agent_config;
+    if (!agent || configLoaded) return;
+    const c = agent.agent_config;
     if (c) {
       setGenConfig({
-        agent_name: c.agent_name || system.name + " Agent",
+        agent_name: c.agent_name || agent.name + " Agent",
         tech_stack: c.tech_stack || "Python 3.11",
         framework: c.framework || "FastAPI + anthropic SDK",
         agent_role: c.agent_role || "",
@@ -149,26 +149,26 @@ export default function SystemDetail() {
     } else if (useCases.length > 0) {
       setGenConfig((prev) => ({
         ...prev,
-        agent_name: prev.agent_name || system.name + " Agent",
-        agent_role: prev.agent_role || generateRoleFromUseCases(system, useCases),
-        auth_notes: prev.auth_notes || (system.api_auth_type && system.api_auth_type !== "none" ? `${system.api_auth_type} — API key from env var` : ""),
-        additional_context: prev.additional_context || generateAdditionalContext(system, useCases),
+        agent_name: prev.agent_name || agent.name + " Agent",
+        agent_role: prev.agent_role || generateRoleFromUseCases(agent, useCases),
+        auth_notes: prev.auth_notes || (agent.api_auth_type && agent.api_auth_type !== "none" ? `${agent.api_auth_type} — API key from env var` : ""),
+        additional_context: prev.additional_context || generateAdditionalContext(agent, useCases),
       }));
       setConfigLoaded(true);
     }
-  }, [system, useCases, configLoaded]);
+  }, [agent, useCases, configLoaded]);
 
   // Load interactions from DB
   useEffect(() => {
     if (!interactions || interactionsLoaded) return;
     setAsksAgents(interactions.asks.map((a) => ({
-      target_system_id: a.target_system_id,
-      target_system_name: a.target_system_name,
+      target_agent_id: a.target_agent_id,
+      target_agent_name: a.target_agent_name,
       use_case_ids: a.use_case_ids,
     })));
     setProvidesToAgents(interactions.provides_to.map((p) => ({
-      source_system_id: p.source_system_id,
-      source_system_name: p.source_system_name,
+      source_agent_id: p.source_agent_id,
+      source_agent_name: p.source_agent_name,
       use_case_ids: p.use_case_ids,
     })));
     setInteractionsLoaded(true);
@@ -179,7 +179,7 @@ export default function SystemDetail() {
   const handleSave = async () => {
     const errors: string[] = [];
 
-    // Save config (agent_config JSON on wb_systems)
+    // Save config (agent_config JSON on wb_agents)
     try {
       const config: AgentConfig = { ...genConfig };
       await saveConfig.mutateAsync({ id: id!, config });
@@ -190,9 +190,9 @@ export default function SystemDetail() {
     // Save interactions (wb_agent_interactions table)
     try {
       await saveInteractionsMut.mutateAsync({
-        systemId: id!,
-        asks: asksAgents.map((a) => ({ target_system_id: a.target_system_id, use_case_ids: a.use_case_ids })),
-        provides_to: providesToAgents.map((p) => ({ source_system_id: p.source_system_id, use_case_ids: p.use_case_ids })),
+        agentId: id!,
+        asks: asksAgents.map((a) => ({ target_agent_id: a.target_agent_id, use_case_ids: a.use_case_ids })),
+        provides_to: providesToAgents.map((p) => ({ source_agent_id: p.source_agent_id, use_case_ids: p.use_case_ids })),
       });
     } catch (e: unknown) {
       errors.push("Interactions: " + (e instanceof Error ? e.message : "unknown error"));
@@ -212,7 +212,7 @@ export default function SystemDetail() {
 
   const handleCreateUc = async (e: React.FormEvent) => {
     e.preventDefault();
-    await createUc.mutateAsync({ systemId: id!, data: ucForm });
+    await createUc.mutateAsync({ agentId: id!, data: ucForm });
     setUcForm({ ...EMPTY_UC });
     setShowUcForm(false);
   };
@@ -231,12 +231,12 @@ export default function SystemDetail() {
 
     const interactionLines: string[] = [];
     for (const a of asksAgents) {
-      const ucNames = a.use_case_ids.map((uid) => (allUseCasesBySystem[a.target_system_id] || []).find((u) => u.id === uid)?.name).filter(Boolean);
-      interactionLines.push(`This agent calls: ${a.target_system_name} Agent` + (ucNames.length ? ` (use cases: ${ucNames.join(", ")})` : ""));
+      const ucNames = a.use_case_ids.map((uid) => (allUseCasesByAgent[a.target_agent_id] || []).find((u) => u.id === uid)?.name).filter(Boolean);
+      interactionLines.push(`This agent calls: ${a.target_agent_name} Agent` + (ucNames.length ? ` (use cases: ${ucNames.join(", ")})` : ""));
     }
     for (const p of providesToAgents) {
-      const ucNames = p.use_case_ids.map((uid) => (allUseCasesBySystem[p.source_system_id] || []).find((u) => u.id === uid)?.name).filter(Boolean);
-      interactionLines.push(`This agent is called by: ${p.source_system_name} Agent` + (ucNames.length ? ` (use cases: ${ucNames.join(", ")})` : ""));
+      const ucNames = p.use_case_ids.map((uid) => (allUseCasesByAgent[p.source_agent_id] || []).find((u) => u.id === uid)?.name).filter(Boolean);
+      interactionLines.push(`This agent is called by: ${p.source_agent_name} Agent` + (ucNames.length ? ` (use cases: ${ucNames.join(", ")})` : ""));
     }
 
     const config: SpecConfig = {
@@ -244,10 +244,10 @@ export default function SystemDetail() {
     };
     try {
       const spec = await genSpec.mutateAsync({
-        agentName: genConfig.agent_name || system!.name + " Agent",
-        systemIds: [id!], useCaseIds: useCases.map((u) => u.id), config,
+        agentName: genConfig.agent_name || agent!.name + " Agent",
+        agentIds: [id!], useCaseIds: useCases.map((u) => u.id), config,
       });
-      nav(`/workbench/agents/${spec.id}`);
+      nav(`/workbench/specs/${spec.id}`);
     } catch (e: unknown) {
       alert("Generation failed: " + (e instanceof Error ? e.message : "Unknown error"));
     }
@@ -256,28 +256,28 @@ export default function SystemDetail() {
   // --- Interaction helpers ---
 
   function addAsk() {
-    const used = asksAgents.map((a) => a.target_system_id);
-    const available = allSystems.filter((s) => !used.includes(s.id));
+    const used = asksAgents.map((a) => a.target_agent_id);
+    const available = allAgents.filter((s) => !used.includes(s.id));
     if (available.length === 0) return;
-    setAsksAgents([...asksAgents, { target_system_id: available[0].id, target_system_name: available[0].name, use_case_ids: [] }]);
+    setAsksAgents([...asksAgents, { target_agent_id: available[0].id, target_agent_name: available[0].name, use_case_ids: [] }]);
   }
 
   function addProvidesTo() {
-    const used = providesToAgents.map((p) => p.source_system_id);
-    const available = allSystems.filter((s) => !used.includes(s.id));
+    const used = providesToAgents.map((p) => p.source_agent_id);
+    const available = allAgents.filter((s) => !used.includes(s.id));
     if (available.length === 0) return;
-    setProvidesToAgents([...providesToAgents, { source_system_id: available[0].id, source_system_name: available[0].name, use_case_ids: [] }]);
+    setProvidesToAgents([...providesToAgents, { source_agent_id: available[0].id, source_agent_name: available[0].name, use_case_ids: [] }]);
   }
 
-  function updateAsk(idx: number, systemId: string) {
+  function updateAsk(idx: number, agentId: string) {
     const updated = [...asksAgents];
-    updated[idx] = { target_system_id: systemId, target_system_name: allSystems.find((s) => s.id === systemId)?.name || "", use_case_ids: [] };
+    updated[idx] = { target_agent_id: agentId, target_agent_name: allAgents.find((s) => s.id === agentId)?.name || "", use_case_ids: [] };
     setAsksAgents(updated);
   }
 
-  function updateProvides(idx: number, systemId: string) {
+  function updateProvides(idx: number, agentId: string) {
     const updated = [...providesToAgents];
-    updated[idx] = { source_system_id: systemId, source_system_name: allSystems.find((s) => s.id === systemId)?.name || "", use_case_ids: [] };
+    updated[idx] = { source_agent_id: agentId, source_agent_name: allAgents.find((s) => s.id === agentId)?.name || "", use_case_ids: [] };
     setProvidesToAgents(updated);
   }
 
@@ -295,32 +295,32 @@ export default function SystemDetail() {
     setProvidesToAgents(updated);
   }
 
-  if (sysLoading || ucLoading) return <p className="text-sm text-gray-500">Loading...</p>;
-  if (!system) return <p className="text-sm text-gray-500">System not found</p>;
+  if (agentLoading || ucLoading) return <p className="text-sm text-gray-500">Loading...</p>;
+  if (!agent) return <p className="text-sm text-gray-500">Agent not found</p>;
 
-  const agentName = genConfig.agent_name || system.name + " Agent";
+  const agentName = genConfig.agent_name || agent.name + " Agent";
 
   // Available agents for dropdowns (exclude already used + self)
-  const asksUsed = asksAgents.map((a) => a.target_system_id);
-  const providesUsed = providesToAgents.map((p) => p.source_system_id);
+  const asksUsed = asksAgents.map((a) => a.target_agent_id);
+  const providesUsed = providesToAgents.map((p) => p.source_agent_id);
 
   return (
     <div className="max-w-5xl mx-auto space-y-6">
       {/* Header */}
       <div className="flex items-start justify-between">
         <div>
-          <h2 className="text-xl font-bold text-text-primary">{system.name}</h2>
-          <p className="text-sm text-gray-500">{system.description}</p>
+          <h2 className="text-xl font-bold text-text-primary">{agent.name}</h2>
+          <p className="text-sm text-gray-500">{agent.description}</p>
         </div>
         <div className="flex items-center gap-2">
-          <span className="text-[11px] px-2 py-0.5 rounded-full bg-gray-200 text-gray-700 font-medium">{system.status}</span>
+          <span className="text-[11px] px-2 py-0.5 rounded-full bg-gray-200 text-gray-700 font-medium">{agent.status}</span>
           <button className={btnSecondary} onClick={handleSave} disabled={isSaving}>
             {saved ? "Saved!" : isSaving ? "Saving..." : "Save"}
           </button>
           <button className={btnPrimary} onClick={handleGenerate} disabled={genSpec.isPending || useCases.length === 0}>
             {genSpec.isPending ? "Generating..." : "Generate Agent Spec"}
           </button>
-          <button className={btnDanger} onClick={async () => { if (confirm("Delete this system and all its use cases?")) { await deleteSys.mutateAsync(id!); nav("/workbench"); } }}>
+          <button className={btnDanger} onClick={async () => { if (confirm("Delete this agent and all its use cases?")) { await deleteAg.mutateAsync(id!); nav("/workbench"); } }}>
             Delete
           </button>
         </div>
@@ -330,11 +330,11 @@ export default function SystemDetail() {
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
         <h3 className="font-semibold text-text-primary mb-3">API & Technology</h3>
         <div className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm mb-4">
-          <div><span className="text-gray-500">Type:</span> <span className="text-text-primary">{system.api_type}</span></div>
-          <div><span className="text-gray-500">Base URL:</span> <span className="text-text-primary">{system.api_base_url || "Not set"}</span></div>
-          <div><span className="text-gray-500">Auth:</span> <span className="text-text-primary">{system.api_auth_type}</span></div>
-          <div><span className="text-gray-500">API Key:</span> <span className="text-text-primary">{system.has_api_key ? "Set" : "Not set"}</span></div>
-          <div className="col-span-2"><span className="text-gray-500">API Spec:</span> <span className="text-text-primary">{system.has_api_spec ? `Loaded (${system.api_spec_endpoint_count} endpoints)` : "Not uploaded"}</span></div>
+          <div><span className="text-gray-500">Type:</span> <span className="text-text-primary">{agent.api_type}</span></div>
+          <div><span className="text-gray-500">Base URL:</span> <span className="text-text-primary">{agent.api_base_url || "Not set"}</span></div>
+          <div><span className="text-gray-500">Auth:</span> <span className="text-text-primary">{agent.api_auth_type}</span></div>
+          <div><span className="text-gray-500">API Key:</span> <span className="text-text-primary">{agent.has_api_key ? "Set" : "Not set"}</span></div>
+          <div className="col-span-2"><span className="text-gray-500">API Spec:</span> <span className="text-text-primary">{agent.has_api_spec ? `Loaded (${agent.api_spec_endpoint_count} endpoints)` : "Not uploaded"}</span></div>
         </div>
         <div className="space-y-3 mb-5 pb-5 border-b border-gray-100">
           <div className="flex gap-2">
@@ -387,22 +387,22 @@ export default function SystemDetail() {
           <div>
             <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">This Agent Asks</h4>
             {asksAgents.map((la, idx) => {
-              const usedIds = asksAgents.filter((_, i) => i !== idx).map((a) => a.target_system_id);
-              const options = allSystems.filter((s) => !usedIds.includes(s.id));
+              const usedIds = asksAgents.filter((_, i) => i !== idx).map((a) => a.target_agent_id);
+              const options = allAgents.filter((s) => !usedIds.includes(s.id));
               return (
                 <div key={idx} className="bg-gray-50 rounded-lg p-3 mb-2 border border-gray-200">
                   <div className="flex items-center gap-2 mb-2 text-sm">
                     <span className="text-gray-600 font-medium whitespace-nowrap">{agentName}</span>
                     <span className="text-gray-400">asks</span>
-                    <select className={`${inp} w-auto flex-1`} value={la.target_system_id} onChange={(e) => updateAsk(idx, e.target.value)}>
+                    <select className={`${inp} w-auto flex-1`} value={la.target_agent_id} onChange={(e) => updateAsk(idx, e.target.value)}>
                       {options.map((s) => <option key={s.id} value={s.id}>{s.name} Agent</option>)}
                     </select>
                     <span className="text-gray-400">for</span>
                     <button className={btnGhostDanger} onClick={() => setAsksAgents(asksAgents.filter((_, i) => i !== idx))}>Remove</button>
                   </div>
-                  {(allUseCasesBySystem[la.target_system_id] || []).length > 0 && (
+                  {(allUseCasesByAgent[la.target_agent_id] || []).length > 0 && (
                     <div className="flex flex-wrap gap-1.5 ml-1">
-                      {(allUseCasesBySystem[la.target_system_id] || []).map((uc) => (
+                      {(allUseCasesByAgent[la.target_agent_id] || []).map((uc) => (
                         <label key={uc.id} className={`text-xs px-2 py-1 rounded border cursor-pointer transition-colors ${la.use_case_ids.includes(uc.id) ? "border-tedee-cyan bg-tedee-cyan/10 text-tedee-navy" : "border-gray-200 bg-white text-gray-500"}`}>
                           <input type="checkbox" className="hidden" checked={la.use_case_ids.includes(uc.id)} onChange={() => toggleAskUc(idx, uc.id)} />
                           {uc.name}
@@ -413,10 +413,10 @@ export default function SystemDetail() {
                 </div>
               );
             })}
-            {allSystems.filter((s) => !asksUsed.includes(s.id)).length > 0 ? (
+            {allAgents.filter((s) => !asksUsed.includes(s.id)).length > 0 ? (
               <button className={btnGhostDefault} onClick={addAsk}>+ Add</button>
-            ) : allSystems.length === 0 ? (
-              <p className="text-xs text-gray-400">Add more systems to link agents together.</p>
+            ) : allAgents.length === 0 ? (
+              <p className="text-xs text-gray-400">Add more agents to link them together.</p>
             ) : asksAgents.length > 0 ? <p className="text-xs text-gray-400">All available agents linked.</p> : null}
           </div>
 
@@ -424,14 +424,14 @@ export default function SystemDetail() {
           <div>
             <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">This Agent Provides Information To</h4>
             {providesToAgents.map((la, idx) => {
-              const usedIds = providesToAgents.filter((_, i) => i !== idx).map((p) => p.source_system_id);
-              const options = allSystems.filter((s) => !usedIds.includes(s.id));
+              const usedIds = providesToAgents.filter((_, i) => i !== idx).map((p) => p.source_agent_id);
+              const options = allAgents.filter((s) => !usedIds.includes(s.id));
               return (
                 <div key={idx} className="bg-gray-50 rounded-lg p-3 mb-2 border border-gray-200">
                   <div className="flex items-center gap-2 mb-2 text-sm">
                     <span className="text-gray-600 font-medium whitespace-nowrap">{agentName}</span>
                     <span className="text-gray-400">provides to</span>
-                    <select className={`${inp} w-auto flex-1`} value={la.source_system_id} onChange={(e) => updateProvides(idx, e.target.value)}>
+                    <select className={`${inp} w-auto flex-1`} value={la.source_agent_id} onChange={(e) => updateProvides(idx, e.target.value)}>
                       {options.map((s) => <option key={s.id} value={s.id}>{s.name} Agent</option>)}
                     </select>
                     <span className="text-gray-400">for</span>
@@ -450,10 +450,10 @@ export default function SystemDetail() {
                 </div>
               );
             })}
-            {allSystems.filter((s) => !providesUsed.includes(s.id)).length > 0 ? (
+            {allAgents.filter((s) => !providesUsed.includes(s.id)).length > 0 ? (
               <button className={btnGhostDefault} onClick={addProvidesTo}>+ Add</button>
-            ) : allSystems.length === 0 ? (
-              <p className="text-xs text-gray-400">Add more systems to link agents together.</p>
+            ) : allAgents.length === 0 ? (
+              <p className="text-xs text-gray-400">Add more agents to link them together.</p>
             ) : providesToAgents.length > 0 ? <p className="text-xs text-gray-400">All available agents linked.</p> : null}
           </div>
         </div>
@@ -491,7 +491,7 @@ export default function SystemDetail() {
           {useCases.map((uc) => (
             <div key={uc.id} className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
               <div className="flex items-center justify-between mb-1">
-                <Link to={`/workbench/systems/${id}/usecases/${uc.id}`} className="font-medium text-sm text-tedee-navy hover:underline">{uc.name}</Link>
+                <Link to={`/workbench/agents/${id}/usecases/${uc.id}`} className="font-medium text-sm text-tedee-navy hover:underline">{uc.name}</Link>
                 <div className="flex gap-1.5">
                   <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${uc.priority === "high" ? "bg-red-100 text-red-700" : uc.priority === "medium" ? "bg-amber-100 text-amber-700" : "bg-gray-100 text-gray-600"}`}>{uc.priority}</span>
                   {uc.is_write && <span className="text-[10px] px-1.5 py-0.5 rounded bg-orange-100 text-orange-700 font-medium">WRITE</span>}
@@ -500,12 +500,12 @@ export default function SystemDetail() {
               </div>
               <p className="text-xs text-gray-500 mb-2">{uc.trigger_text || uc.description}</p>
               <div className="flex gap-2">
-                <Link to={`/workbench/systems/${id}/usecases/${uc.id}`} className={btnGhostCyan}>Open Playground</Link>
+                <Link to={`/workbench/agents/${id}/usecases/${uc.id}`} className={btnGhostCyan}>Open Playground</Link>
                 <button className={btnGhostDanger} onClick={async () => { if (confirm("Delete this use case?")) await deleteUc.mutateAsync(uc.id); }}>Delete</button>
               </div>
             </div>
           ))}
-          {useCases.length === 0 && <p className="text-sm text-gray-500 py-4 text-center">No use cases yet. Define what humans do with this system today.</p>}
+          {useCases.length === 0 && <p className="text-sm text-gray-500 py-4 text-center">No use cases yet. Define what humans do with this agent today.</p>}
         </div>
       </div>
     </div>

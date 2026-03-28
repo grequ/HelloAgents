@@ -20,7 +20,7 @@ def _parse_json_field(value):
     return value
 
 
-def _row_to_system(row: dict) -> dict:
+def _row_to_agent(row: dict) -> dict:
     row["has_api_key"] = bool(row.pop("api_key_enc", None))
     spec = _parse_json_field(row.get("api_spec"))
     row["api_spec"] = spec
@@ -42,7 +42,7 @@ def _row_to_use_case(row: dict) -> dict:
 
 
 def _row_to_spec(row: dict) -> dict:
-    row["system_ids"] = _parse_json_field(row.get("system_ids"))
+    row["agent_ids"] = _parse_json_field(row.get("agent_ids"))
     row["use_case_ids"] = _parse_json_field(row.get("use_case_ids"))
     row["tools_json"] = _parse_json_field(row.get("tools_json"))
     row["depends_on"] = _parse_json_field(row.get("depends_on"))
@@ -53,63 +53,88 @@ def _row_to_spec(row: dict) -> dict:
 # ---- Migrations (idempotent) ----
 
 async def ensure_schema():
-    """Run on startup to add any missing columns/tables."""
+    """Run on startup to add any missing columns/tables and handle renames."""
     pool = await get_pool()
     async with pool.acquire() as conn:
         async with conn.cursor() as cur:
+            # Rename wb_systems → wb_agents if old table still exists
+            await cur.execute("""
+                SELECT COUNT(*) FROM information_schema.TABLES
+                WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'wb_systems'
+            """)
+            row = await cur.fetchone()
+            if row[0] > 0:
+                await cur.execute("RENAME TABLE wb_systems TO wb_agents")
+                # Rename system_id → agent_id in wb_use_cases
+                try:
+                    await cur.execute("ALTER TABLE wb_use_cases CHANGE system_id agent_id CHAR(36) NOT NULL")
+                except Exception:
+                    pass
+                # Rename columns in wb_agent_interactions if they exist
+                try:
+                    await cur.execute("ALTER TABLE wb_agent_interactions CHANGE from_system_id from_agent_id CHAR(36) NOT NULL")
+                    await cur.execute("ALTER TABLE wb_agent_interactions CHANGE to_system_id to_agent_id CHAR(36) NOT NULL")
+                except Exception:
+                    pass
+                # Rename system_ids → agent_ids in wb_agent_specs
+                try:
+                    await cur.execute("ALTER TABLE wb_agent_specs CHANGE system_ids agent_ids JSON")
+                except Exception:
+                    pass
+
             # Add agent_config column if missing
             await cur.execute("""
                 SELECT COUNT(*) FROM information_schema.COLUMNS
                 WHERE TABLE_SCHEMA = DATABASE()
-                  AND TABLE_NAME = 'wb_systems'
+                  AND TABLE_NAME = 'wb_agents'
                   AND COLUMN_NAME = 'agent_config'
             """)
             row = await cur.fetchone()
             if row[0] == 0:
-                await cur.execute("ALTER TABLE wb_systems ADD COLUMN agent_config JSON")
+                await cur.execute("ALTER TABLE wb_agents ADD COLUMN agent_config JSON")
 
             # Create interactions table if missing
             await cur.execute("""
                 CREATE TABLE IF NOT EXISTS wb_agent_interactions (
                     id              CHAR(36) PRIMARY KEY,
-                    from_system_id  CHAR(36) NOT NULL,
-                    to_system_id    CHAR(36) NOT NULL,
+                    from_agent_id   CHAR(36) NOT NULL,
+                    to_agent_id     CHAR(36) NOT NULL,
                     use_case_ids    JSON,
                     created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    FOREIGN KEY (from_system_id) REFERENCES wb_systems(id) ON DELETE CASCADE,
-                    FOREIGN KEY (to_system_id) REFERENCES wb_systems(id) ON DELETE CASCADE
+                    FOREIGN KEY (from_agent_id) REFERENCES wb_agents(id) ON DELETE CASCADE,
+                    FOREIGN KEY (to_agent_id) REFERENCES wb_agents(id) ON DELETE CASCADE
                 )
             """)
 
 
-# ---- Systems ----
+# ---- Agents ----
 
-async def list_systems() -> list[dict]:
+async def list_agents() -> list[dict]:
     pool = await get_pool()
     async with pool.acquire() as conn:
         async with conn.cursor(dict_cursor()) as cur:
             await cur.execute("""
                 SELECT s.*, COUNT(uc.id) as use_case_count
-                FROM wb_systems s
-                LEFT JOIN wb_use_cases uc ON uc.system_id = s.id
+                FROM wb_agents s
+                LEFT JOIN wb_use_cases uc ON uc.agent_id = s.id
                 GROUP BY s.id ORDER BY s.name
             """)
             rows = await cur.fetchall()
-    return [_row_to_system(r) for r in rows]
+    return [_row_to_agent(r) for r in rows]
 
 
-async def get_system(system_id: str) -> dict | None:
+async def get_agent(agent_id: str) -> dict | None:
     pool = await get_pool()
     async with pool.acquire() as conn:
         async with conn.cursor(dict_cursor()) as cur:
-            await cur.execute("SELECT * FROM wb_systems WHERE id = %s", (system_id,))
+            await cur.execute("SELECT * FROM wb_agents WHERE id = %s", (agent_id,))
             row = await cur.fetchone()
     if row is None:
         return None
-    return _row_to_system(row)
+    return _row_to_agent(row)
 
 
-async def create_system(data: dict) -> dict:
+async def create_agent(data: dict) -> dict:
     sid = _new_id()
     pool = await get_pool()
     cols = ["id", "name", "description", "category", "owner_team",
@@ -123,11 +148,11 @@ async def create_system(data: dict) -> dict:
     col_names = ", ".join(cols)
     async with pool.acquire() as conn:
         async with conn.cursor() as cur:
-            await cur.execute(f"INSERT INTO wb_systems ({col_names}) VALUES ({placeholders})", vals)
-    return await get_system(sid)
+            await cur.execute(f"INSERT INTO wb_agents ({col_names}) VALUES ({placeholders})", vals)
+    return await get_agent(sid)
 
 
-async def update_system(system_id: str, data: dict) -> dict | None:
+async def update_agent(agent_id: str, data: dict) -> dict | None:
     pool = await get_pool()
     fields = {k: v for k, v in data.items() if v is not None}
     if "api_auth_config" in fields and isinstance(fields["api_auth_config"], dict):
@@ -135,62 +160,62 @@ async def update_system(system_id: str, data: dict) -> dict | None:
     if "agent_config" in fields and isinstance(fields["agent_config"], dict):
         fields["agent_config"] = json.dumps(fields["agent_config"])
     if not fields:
-        return await get_system(system_id)
+        return await get_agent(agent_id)
     sets = ", ".join(f"{k} = %s" for k in fields)
-    vals = [*fields.values(), system_id]
+    vals = [*fields.values(), agent_id]
     async with pool.acquire() as conn:
         async with conn.cursor() as cur:
-            await cur.execute(f"UPDATE wb_systems SET {sets} WHERE id = %s", vals)
-    return await get_system(system_id)
+            await cur.execute(f"UPDATE wb_agents SET {sets} WHERE id = %s", vals)
+    return await get_agent(agent_id)
 
 
-async def delete_system(system_id: str):
+async def delete_agent(agent_id: str):
     pool = await get_pool()
     async with pool.acquire() as conn:
         async with conn.cursor() as cur:
-            await cur.execute("DELETE FROM wb_systems WHERE id = %s", (system_id,))
+            await cur.execute("DELETE FROM wb_agents WHERE id = %s", (agent_id,))
 
 
-async def set_system_api_key(system_id: str, encrypted_key: str):
+async def set_agent_api_key(agent_id: str, encrypted_key: str):
     pool = await get_pool()
     async with pool.acquire() as conn:
         async with conn.cursor() as cur:
-            await cur.execute("UPDATE wb_systems SET api_key_enc = %s WHERE id = %s",
-                              (encrypted_key, system_id))
+            await cur.execute("UPDATE wb_agents SET api_key_enc = %s WHERE id = %s",
+                              (encrypted_key, agent_id))
 
 
-async def get_system_api_key_enc(system_id: str) -> str | None:
+async def get_agent_api_key_enc(agent_id: str) -> str | None:
     pool = await get_pool()
     async with pool.acquire() as conn:
         async with conn.cursor(dict_cursor()) as cur:
-            await cur.execute("SELECT api_key_enc FROM wb_systems WHERE id = %s", (system_id,))
+            await cur.execute("SELECT api_key_enc FROM wb_agents WHERE id = %s", (agent_id,))
             row = await cur.fetchone()
     return row["api_key_enc"] if row else None
 
 
-async def set_system_api_spec(system_id: str, spec: dict):
+async def set_agent_api_spec(agent_id: str, spec: dict):
     pool = await get_pool()
     async with pool.acquire() as conn:
         async with conn.cursor() as cur:
-            await cur.execute("UPDATE wb_systems SET api_spec = %s, status = 'api_documented' WHERE id = %s",
-                              (json.dumps(spec), system_id))
+            await cur.execute("UPDATE wb_agents SET api_spec = %s, status = 'api_documented' WHERE id = %s",
+                              (json.dumps(spec), agent_id))
 
 
-async def update_system_status(system_id: str, status: str):
+async def update_agent_status(agent_id: str, status: str):
     pool = await get_pool()
     async with pool.acquire() as conn:
         async with conn.cursor() as cur:
-            await cur.execute("UPDATE wb_systems SET status = %s WHERE id = %s", (status, system_id))
+            await cur.execute("UPDATE wb_agents SET status = %s WHERE id = %s", (status, agent_id))
 
 
 # ---- Use Cases ----
 
-async def list_use_cases(system_id: str) -> list[dict]:
+async def list_use_cases(agent_id: str) -> list[dict]:
     pool = await get_pool()
     async with pool.acquire() as conn:
         async with conn.cursor(dict_cursor()) as cur:
-            await cur.execute("SELECT * FROM wb_use_cases WHERE system_id = %s ORDER BY priority DESC, name",
-                              (system_id,))
+            await cur.execute("SELECT * FROM wb_use_cases WHERE agent_id = %s ORDER BY priority DESC, name",
+                              (agent_id,))
             rows = await cur.fetchall()
     return [_row_to_use_case(r) for r in rows]
 
@@ -206,12 +231,12 @@ async def get_use_case(uc_id: str) -> dict | None:
     return _row_to_use_case(row)
 
 
-async def create_use_case(system_id: str, data: dict) -> dict:
+async def create_use_case(agent_id: str, data: dict) -> dict:
     uc_id = _new_id()
     pool = await get_pool()
-    cols = ["id", "system_id", "name", "description", "trigger_text", "user_input",
+    cols = ["id", "agent_id", "name", "description", "trigger_text", "user_input",
             "expected_output", "frequency", "is_write", "priority"]
-    vals = [uc_id, system_id, data["name"], data.get("description", ""),
+    vals = [uc_id, agent_id, data["name"], data.get("description", ""),
             data.get("trigger_text", ""), data.get("user_input", ""),
             data.get("expected_output", ""), data.get("frequency", ""),
             data.get("is_write", False), data.get("priority", "medium")]
@@ -300,10 +325,10 @@ async def create_spec(data: dict) -> dict:
         async with conn.cursor() as cur:
             await cur.execute(
                 """INSERT INTO wb_agent_specs
-                   (id, name, system_ids, use_case_ids, spec_markdown, tools_json, system_prompt, skeleton_code, depends_on, called_by)
+                   (id, name, agent_ids, use_case_ids, spec_markdown, tools_json, system_prompt, skeleton_code, depends_on, called_by)
                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""",
                 (spec_id, data["name"],
-                 json.dumps(data.get("system_ids", [])),
+                 json.dumps(data.get("agent_ids", [])),
                  json.dumps(data.get("use_case_ids", [])),
                  data.get("spec_markdown", ""),
                  json.dumps(data.get("tools_json", [])),
@@ -319,7 +344,7 @@ async def update_spec(spec_id: str, data: dict) -> dict | None:
     fields = {}
     for k, v in data.items():
         if v is not None:
-            if k in ("system_ids", "use_case_ids", "tools_json", "depends_on", "called_by"):
+            if k in ("agent_ids", "use_case_ids", "tools_json", "depends_on", "called_by"):
                 fields[k] = json.dumps(v)
             else:
                 fields[k] = v
@@ -343,40 +368,40 @@ async def delete_spec(spec_id: str):
 # ---- Agent Interactions ----
 
 async def get_all_interactions() -> list[dict]:
-    """Return all interactions with system names."""
+    """Return all interactions with agent names."""
     pool = await get_pool()
     async with pool.acquire() as conn:
         async with conn.cursor(dict_cursor()) as cur:
             await cur.execute(
-                """SELECT i.id, i.from_system_id, sf.name as from_system_name,
-                          i.to_system_id, st.name as to_system_name, i.use_case_ids
+                """SELECT i.id, i.from_agent_id, sf.name as from_agent_name,
+                          i.to_agent_id, st.name as to_agent_name, i.use_case_ids
                    FROM wb_agent_interactions i
-                   JOIN wb_systems sf ON sf.id = i.from_system_id
-                   JOIN wb_systems st ON st.id = i.to_system_id""")
+                   JOIN wb_agents sf ON sf.id = i.from_agent_id
+                   JOIN wb_agents st ON st.id = i.to_agent_id""")
             rows = await cur.fetchall()
     for row in rows:
         row["use_case_ids"] = _parse_json_field(row.get("use_case_ids")) or []
     return rows
 
 
-async def get_interactions(system_id: str) -> dict:
-    """Return asks (from=system_id) and provides_to (to=system_id) with system names."""
+async def get_interactions(agent_id: str) -> dict:
+    """Return asks (from=agent_id) and provides_to (to=agent_id) with agent names."""
     pool = await get_pool()
     async with pool.acquire() as conn:
         async with conn.cursor(dict_cursor()) as cur:
-            # Outgoing: this system calls others
+            # Outgoing: this agent calls others
             await cur.execute(
-                """SELECT i.id, i.to_system_id as target_system_id, s.name as target_system_name, i.use_case_ids
+                """SELECT i.id, i.to_agent_id as target_agent_id, s.name as target_agent_name, i.use_case_ids
                    FROM wb_agent_interactions i
-                   JOIN wb_systems s ON s.id = i.to_system_id
-                   WHERE i.from_system_id = %s""", (system_id,))
+                   JOIN wb_agents s ON s.id = i.to_agent_id
+                   WHERE i.from_agent_id = %s""", (agent_id,))
             asks = await cur.fetchall()
-            # Incoming: others call this system
+            # Incoming: others call this agent
             await cur.execute(
-                """SELECT i.id, i.from_system_id as source_system_id, s.name as source_system_name, i.use_case_ids
+                """SELECT i.id, i.from_agent_id as source_agent_id, s.name as source_agent_name, i.use_case_ids
                    FROM wb_agent_interactions i
-                   JOIN wb_systems s ON s.id = i.from_system_id
-                   WHERE i.to_system_id = %s""", (system_id,))
+                   JOIN wb_agents s ON s.id = i.from_agent_id
+                   WHERE i.to_agent_id = %s""", (agent_id,))
             provides_to = await cur.fetchall()
     for row in asks:
         row["use_case_ids"] = _parse_json_field(row.get("use_case_ids")) or []
@@ -385,30 +410,30 @@ async def get_interactions(system_id: str) -> dict:
     return {"asks": asks, "provides_to": provides_to}
 
 
-async def save_interactions(system_id: str, asks: list[dict], provides_to: list[dict]):
-    """Replace all interactions for a system.
-    asks: [{target_system_id, use_case_ids}]  — this system calls target
-    provides_to: [{source_system_id, use_case_ids}]  — source calls this system
+async def save_interactions(agent_id: str, asks: list[dict], provides_to: list[dict]):
+    """Replace all interactions for an agent.
+    asks: [{target_agent_id, use_case_ids}]  — this agent calls target
+    provides_to: [{source_agent_id, use_case_ids}]  — source calls this agent
     """
     pool = await get_pool()
     async with pool.acquire() as conn:
         async with conn.cursor() as cur:
             # Delete outgoing
-            await cur.execute("DELETE FROM wb_agent_interactions WHERE from_system_id = %s", (system_id,))
+            await cur.execute("DELETE FROM wb_agent_interactions WHERE from_agent_id = %s", (agent_id,))
             # Delete incoming
-            await cur.execute("DELETE FROM wb_agent_interactions WHERE to_system_id = %s", (system_id,))
+            await cur.execute("DELETE FROM wb_agent_interactions WHERE to_agent_id = %s", (agent_id,))
             # Insert outgoing (asks)
             for a in asks:
                 iid = _new_id()
                 await cur.execute(
-                    "INSERT INTO wb_agent_interactions (id, from_system_id, to_system_id, use_case_ids) VALUES (%s, %s, %s, %s)",
-                    (iid, system_id, a["target_system_id"], json.dumps(a.get("use_case_ids", []))))
+                    "INSERT INTO wb_agent_interactions (id, from_agent_id, to_agent_id, use_case_ids) VALUES (%s, %s, %s, %s)",
+                    (iid, agent_id, a["target_agent_id"], json.dumps(a.get("use_case_ids", []))))
             # Insert incoming (provides_to)
             for p in provides_to:
                 iid = _new_id()
                 await cur.execute(
-                    "INSERT INTO wb_agent_interactions (id, from_system_id, to_system_id, use_case_ids) VALUES (%s, %s, %s, %s)",
-                    (iid, p["source_system_id"], system_id, json.dumps(p.get("use_case_ids", []))))
+                    "INSERT INTO wb_agent_interactions (id, from_agent_id, to_agent_id, use_case_ids) VALUES (%s, %s, %s, %s)",
+                    (iid, p["source_agent_id"], agent_id, json.dumps(p.get("use_case_ids", []))))
 
 
 # ---- Dashboard ----
@@ -417,14 +442,14 @@ async def get_dashboard_stats() -> dict:
     pool = await get_pool()
     async with pool.acquire() as conn:
         async with conn.cursor(dict_cursor()) as cur:
-            await cur.execute("SELECT COUNT(*) as total, status FROM wb_systems GROUP BY status")
+            await cur.execute("SELECT COUNT(*) as total, status FROM wb_agents GROUP BY status")
             sys_rows = await cur.fetchall()
             await cur.execute("SELECT COUNT(*) as total, status FROM wb_use_cases GROUP BY status")
             uc_rows = await cur.fetchall()
             await cur.execute("SELECT COUNT(*) as total FROM wb_agent_specs")
             spec_row = await cur.fetchone()
     return {
-        "systems": {r["status"]: r["total"] for r in sys_rows},
+        "agents": {r["status"]: r["total"] for r in sys_rows},
         "use_cases": {r["status"]: r["total"] for r in uc_rows},
         "specs_total": spec_row["total"] if spec_row else 0,
     }

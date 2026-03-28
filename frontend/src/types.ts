@@ -1,6 +1,6 @@
-// --- Systems ---
+// --- Agents ---
 
-export interface System {
+export interface Agent {
   id: string;
   name: string;
   description: string;
@@ -36,15 +36,15 @@ export interface AgentConfig {
 
 export interface InteractionAsk {
   id?: string;
-  target_system_id: string;
-  target_system_name: string;
+  target_agent_id: string;
+  target_agent_name: string;
   use_case_ids: string[];
 }
 
 export interface InteractionProvides {
   id?: string;
-  source_system_id: string;
-  source_system_name: string;
+  source_agent_id: string;
+  source_agent_name: string;
   use_case_ids: string[];
 }
 
@@ -53,7 +53,7 @@ export interface Interactions {
   provides_to: InteractionProvides[];
 }
 
-export interface SystemCreate {
+export interface AgentCreate {
   name: string;
   description?: string;
   category?: string;
@@ -90,7 +90,7 @@ export interface TestResult {
 
 export interface UseCase {
   id: string;
-  system_id: string;
+  agent_id: string;
   name: string;
   description: string;
   trigger_text: string;
@@ -137,7 +137,7 @@ export interface AgentSpec {
   tools_json: unknown;
   system_prompt: string;
   skeleton_code: string;
-  system_ids: string[];
+  agent_ids: string[];
   use_case_ids: string[];
   depends_on?: string[];
   called_by?: string[];
@@ -158,9 +158,9 @@ export interface SpecConfig {
 // --- Dashboard ---
 
 export interface DashboardData {
-  systems: System[];
+  agents: Agent[];
   stats: {
-    systems: Record<string, number>;
+    agents: Record<string, number>;
     use_cases: Record<string, number>;
     specs_total: number;
   };

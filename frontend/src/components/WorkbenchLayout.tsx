@@ -9,7 +9,7 @@ const NAV_ITEMS = [
     section: "WORKBENCH",
     links: [
       { to: "/workbench", label: "Dashboard", end: true },
-      { to: "/workbench/agents", label: "Agent Specs" },
+      { to: "/workbench/specs", label: "Generated Specs" },
       { to: "/workbench/map", label: "Map" },
     ],
   },
@@ -18,23 +18,23 @@ const NAV_ITEMS = [
 function pageTitle(pathname: string): string {
   if (pathname === "/workbench") return "Dashboard";
   if (pathname === "/workbench/map") return "Agent Architecture Map";
-  if (pathname.includes("/agents")) return "Agent Specs";
+  if (pathname.includes("/specs")) return "Generated Specs";
   if (pathname.includes("/usecases")) return "Playground";
-  if (pathname.includes("/systems")) return "System Detail";
+  if (pathname.match(/\/agents\/[^/]+$/)) return "Agent Detail";
   return "Workbench";
 }
 
 function parentPath(pathname: string): { to: string; label: string } | null {
   if (pathname.includes("/usecases/")) {
-    // /workbench/systems/:id/usecases/:ucId → back to system
-    const sysId = pathname.split("/systems/")[1]?.split("/")[0];
-    return sysId ? { to: `/workbench/systems/${sysId}`, label: "System Detail" } : null;
-  }
-  if (pathname.match(/\/systems\/[^/]+$/)) {
-    return { to: "/workbench", label: "Dashboard" };
+    // /workbench/agents/:id/usecases/:ucId → back to agent
+    const agentId = pathname.split("/agents/")[1]?.split("/")[0];
+    return agentId ? { to: `/workbench/agents/${agentId}`, label: "Agent Detail" } : null;
   }
   if (pathname.match(/\/agents\/[^/]+$/)) {
-    return { to: "/workbench/agents", label: "Agent Specs" };
+    return { to: "/workbench", label: "Dashboard" };
+  }
+  if (pathname.match(/\/specs\/[^/]+$/)) {
+    return { to: "/workbench/specs", label: "Generated Specs" };
   }
   return null;
 }

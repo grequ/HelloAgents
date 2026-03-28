@@ -79,7 +79,7 @@ export default function AgentSpecView() {
   const handleDelete = async () => {
     if (!id || !confirm("Delete this agent spec permanently?")) return;
     await deleteSpecMut.mutateAsync(id);
-    nav("/workbench/agents");
+    nav("/workbench/specs");
   };
 
   if (!spec) return <p className="text-sm text-gray-500">Loading...</p>;

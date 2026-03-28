@@ -10,7 +10,7 @@ export default defineConfig({
       "/chat": "http://localhost:8000",
       "/orders": "http://localhost:8000",
       "/workbench/interactions": "http://localhost:8000",
-      "/workbench/systems": "http://localhost:8000",
+      "/workbench/agents": "http://localhost:8000",
       "/workbench/usecases": "http://localhost:8000",
       "/workbench/discover": "http://localhost:8000",
       "/workbench/test": "http://localhost:8000",

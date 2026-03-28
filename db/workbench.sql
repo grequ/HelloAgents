@@ -1,6 +1,6 @@
 USE helloagents;
 
-CREATE TABLE IF NOT EXISTS wb_systems (
+CREATE TABLE IF NOT EXISTS wb_agents (
     id              CHAR(36) PRIMARY KEY,
     name            VARCHAR(200) NOT NULL,
     description     TEXT,
@@ -21,7 +21,7 @@ CREATE TABLE IF NOT EXISTS wb_systems (
 
 CREATE TABLE IF NOT EXISTS wb_use_cases (
     id                   CHAR(36) PRIMARY KEY,
-    system_id            CHAR(36) NOT NULL,
+    agent_id             CHAR(36) NOT NULL,
     name                 VARCHAR(200) NOT NULL,
     description          TEXT,
     trigger_text         TEXT,
@@ -36,13 +36,13 @@ CREATE TABLE IF NOT EXISTS wb_use_cases (
     status               VARCHAR(20) DEFAULT 'draft',
     created_at           TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at           TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    FOREIGN KEY (system_id) REFERENCES wb_systems(id) ON DELETE CASCADE
+    FOREIGN KEY (agent_id) REFERENCES wb_agents(id) ON DELETE CASCADE
 );
 
 CREATE TABLE IF NOT EXISTS wb_agent_specs (
     id              CHAR(36) PRIMARY KEY,
     name            VARCHAR(200) NOT NULL,
-    system_ids      JSON,
+    agent_ids       JSON,
     use_case_ids    JSON,
     spec_markdown   LONGTEXT,
     tools_json      JSON,
@@ -56,10 +56,10 @@ CREATE TABLE IF NOT EXISTS wb_agent_specs (
 
 CREATE TABLE IF NOT EXISTS wb_agent_interactions (
     id              CHAR(36) PRIMARY KEY,
-    from_system_id  CHAR(36) NOT NULL,
-    to_system_id    CHAR(36) NOT NULL,
+    from_agent_id   CHAR(36) NOT NULL,
+    to_agent_id     CHAR(36) NOT NULL,
     use_case_ids    JSON,
     created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (from_system_id) REFERENCES wb_systems(id) ON DELETE CASCADE,
-    FOREIGN KEY (to_system_id) REFERENCES wb_systems(id) ON DELETE CASCADE
+    FOREIGN KEY (from_agent_id) REFERENCES wb_agents(id) ON DELETE CASCADE,
+    FOREIGN KEY (to_agent_id) REFERENCES wb_agents(id) ON DELETE CASCADE
 );

@@ -1,6 +1,6 @@
 import type {
-  System,
-  SystemCreate,
+  Agent,
+  AgentCreate,
   UseCase,
   UseCaseCreate,
   AgentSpec,
@@ -39,46 +39,46 @@ export async function getDashboard(): Promise<DashboardData> {
   return request<DashboardData>("GET", "/dashboard");
 }
 
-// Systems
-export async function listSystems(): Promise<System[]> {
-  return request<System[]>("GET", "/systems");
+// Agents
+export async function listAgents(): Promise<Agent[]> {
+  return request<Agent[]>("GET", "/agents");
 }
 
-export async function createSystem(data: SystemCreate): Promise<System> {
-  return request<System>("POST", "/systems", data);
+export async function createAgent(data: AgentCreate): Promise<Agent> {
+  return request<Agent>("POST", "/agents", data);
 }
 
-export async function getSystem(id: string): Promise<System> {
-  return request<System>("GET", `/systems/${id}`);
+export async function getAgent(id: string): Promise<Agent> {
+  return request<Agent>("GET", `/agents/${id}`);
 }
 
-export async function updateSystem(id: string, data: Record<string, unknown>): Promise<System> {
-  return request<System>("PUT", `/systems/${id}`, data);
+export async function updateAgent(id: string, data: Record<string, unknown>): Promise<Agent> {
+  return request<Agent>("PUT", `/agents/${id}`, data);
 }
 
-export async function deleteSystem(id: string): Promise<void> {
-  return request<void>("DELETE", `/systems/${id}`);
+export async function deleteAgent(id: string): Promise<void> {
+  return request<void>("DELETE", `/agents/${id}`);
 }
 
-export async function setSystemApiKey(id: string, apiKey: string): Promise<void> {
-  return request<void>("POST", `/systems/${id}/api-key`, { api_key: apiKey });
+export async function setAgentApiKey(id: string, apiKey: string): Promise<void> {
+  return request<void>("POST", `/agents/${id}/api-key`, { api_key: apiKey });
 }
 
-export async function uploadSystemSpecJson(id: string, spec: unknown): Promise<void> {
-  return request<void>("POST", `/systems/${id}/upload-spec-json`, spec);
+export async function uploadAgentSpecJson(id: string, spec: unknown): Promise<void> {
+  return request<void>("POST", `/agents/${id}/upload-spec-json`, spec);
 }
 
-export async function testSystemConnection(id: string): Promise<ConnectionResult> {
-  return request<ConnectionResult>("POST", `/systems/${id}/test-connection`);
+export async function testAgentConnection(id: string): Promise<ConnectionResult> {
+  return request<ConnectionResult>("POST", `/agents/${id}/test-connection`);
 }
 
 // Interactions (relational)
 export interface InteractionRow {
   id: string;
-  from_system_id: string;
-  from_system_name: string;
-  to_system_id: string;
-  to_system_name: string;
+  from_agent_id: string;
+  from_agent_name: string;
+  to_agent_id: string;
+  to_agent_name: string;
   use_case_ids: string[];
 }
 
@@ -86,27 +86,27 @@ export async function getAllInteractions(): Promise<InteractionRow[]> {
   return request<InteractionRow[]>("GET", "/interactions");
 }
 
-export async function getInteractions(systemId: string): Promise<Interactions> {
-  return request<Interactions>("GET", `/systems/${systemId}/interactions`);
+export async function getInteractions(agentId: string): Promise<Interactions> {
+  return request<Interactions>("GET", `/agents/${agentId}/interactions`);
 }
 
 export async function saveInteractions(
-  systemId: string,
+  agentId: string,
   data: {
-    asks: { target_system_id: string; use_case_ids: string[] }[];
-    provides_to: { source_system_id: string; use_case_ids: string[] }[];
+    asks: { target_agent_id: string; use_case_ids: string[] }[];
+    provides_to: { source_agent_id: string; use_case_ids: string[] }[];
   },
 ): Promise<Interactions> {
-  return request<Interactions>("PUT", `/systems/${systemId}/interactions`, data);
+  return request<Interactions>("PUT", `/agents/${agentId}/interactions`, data);
 }
 
-// Use cases (nested under system)
-export async function listUseCases(systemId: string): Promise<UseCase[]> {
-  return request<UseCase[]>("GET", `/systems/${systemId}/usecases`);
+// Use cases (nested under agent)
+export async function listUseCases(agentId: string): Promise<UseCase[]> {
+  return request<UseCase[]>("GET", `/agents/${agentId}/usecases`);
 }
 
-export async function createUseCase(systemId: string, data: UseCaseCreate): Promise<UseCase> {
-  return request<UseCase>("POST", `/systems/${systemId}/usecases`, data);
+export async function createUseCase(agentId: string, data: UseCaseCreate): Promise<UseCase> {
+  return request<UseCase>("POST", `/agents/${agentId}/usecases`, data);
 }
 
 // Use cases (top-level)
@@ -130,20 +130,20 @@ export async function saveDiscovery(
 }
 
 // Discover & Test
-export async function discover(systemId: string, useCaseId: string): Promise<DiscoveryResult> {
+export async function discover(agentId: string, useCaseId: string): Promise<DiscoveryResult> {
   return request<DiscoveryResult>("POST", "/discover", {
-    system_id: systemId,
+    agent_id: agentId,
     use_case_id: useCaseId,
   });
 }
 
 export async function runTest(
-  systemId: string,
+  agentId: string,
   useCaseId: string,
   testInput: unknown,
 ): Promise<TestResult> {
   return request<TestResult>("POST", "/test", {
-    system_id: systemId,
+    agent_id: agentId,
     use_case_id: useCaseId,
     test_input: testInput,
   });
@@ -152,13 +152,13 @@ export async function runTest(
 // Spec generation
 export async function generateSpec(
   agentName: string,
-  systemIds: string[],
+  agentIds: string[],
   useCaseIds: string[],
   config?: SpecConfig,
 ): Promise<AgentSpec> {
   return request<AgentSpec>("POST", "/generate-spec", {
     agent_name: agentName,
-    system_ids: systemIds,
+    agent_ids: agentIds,
     use_case_ids: useCaseIds,
     config: config || undefined,
   });

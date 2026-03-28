@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback, type RefObject } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import type { Endpoint } from "../types";
-import { useSystem, useUseCase, useDiscover, useRunTest, useSaveDiscovery, useDeleteUseCase } from "./queries";
+import { useAgent, useUseCase, useDiscover, useRunTest, useSaveDiscovery, useDeleteUseCase } from "./queries";
 import { getUseCase as fetchUseCase } from "./api";
 import { btnPrimary, btnDanger, btnSuccess, btnGhost, btnGhostDanger, inp } from "./ui";
 
@@ -37,9 +37,9 @@ function guessTestInput(userInput?: string): string {
 }
 
 export default function Playground() {
-  const { id: systemId, ucId } = useParams<{ id: string; ucId: string }>();
+  const { id: agentId, ucId } = useParams<{ id: string; ucId: string }>();
   const nav = useNavigate();
-  const { data: system } = useSystem(systemId!);
+  const { data: agent } = useAgent(agentId!);
   const { data: uc, refetch: refetchUc } = useUseCase(ucId!);
 
   const discoverMut = useDiscover();
@@ -70,7 +70,7 @@ export default function Playground() {
 
   const handleDiscover = async () => {
     try {
-      const result = await discoverMut.mutateAsync({ systemId: systemId!, useCaseId: ucId! });
+      const result = await discoverMut.mutateAsync({ agentId: agentId!, useCaseId: ucId! });
       setEndpoints(result.endpoints || []);
       setBehavior(result.behavior || "");
       setToolDef(result.tool_definition ? JSON.stringify(result.tool_definition, null, 2) : "");
@@ -102,7 +102,7 @@ export default function Playground() {
     setTestResult(null);
     try {
       const input = JSON.parse(testInputStr);
-      const result = await runTestMut.mutateAsync({ systemId: systemId!, useCaseId: ucId!, testInput: input });
+      const result = await runTestMut.mutateAsync({ agentId: agentId!, useCaseId: ucId!, testInput: input });
       setTestResult(result as unknown as Record<string, unknown>);
       refetchUc();
     } catch (e: unknown) {
@@ -112,7 +112,7 @@ export default function Playground() {
 
   // (styles imported from ./ui)
 
-  if (!system || !uc) return <p className="text-sm text-gray-500">Loading...</p>;
+  if (!agent || !uc) return <p className="text-sm text-gray-500">Loading...</p>;
 
   const testSteps = (testResult?.steps as Array<Record<string, unknown>>) || [];
 
@@ -126,7 +126,7 @@ export default function Playground() {
         </div>
         <button
           className={btnDanger}
-          onClick={async () => { if (confirm("Delete this use case?")) { await deleteUcMut.mutateAsync(ucId!); nav(`/workbench/systems/${systemId}`); } }}
+          onClick={async () => { if (confirm("Delete this use case?")) { await deleteUcMut.mutateAsync(ucId!); nav(`/workbench/agents/${agentId}`); } }}
         >
           Delete Use Case
         </button>
@@ -187,7 +187,7 @@ export default function Playground() {
                 >
                   {saveDiscMut.isPending ? "Saving..." : "Save Changes"}
                 </button>
-                {!system.has_api_spec ? (
+                {!agent.has_api_spec ? (
                   <span className="text-xs text-amber-600">Upload API spec first</span>
                 ) : (
                   <button className={btnPrimary} onClick={handleDiscover} disabled={discoverMut.isPending}>

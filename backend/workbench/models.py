@@ -5,9 +5,9 @@ from typing import Optional
 from datetime import datetime
 
 
-# --- Systems ---
+# --- Agents ---
 
-class SystemCreate(BaseModel):
+class AgentCreate(BaseModel):
     name: str
     description: str = ""
     category: str = ""
@@ -19,7 +19,7 @@ class SystemCreate(BaseModel):
     api_auth_config: dict | None = None
 
 
-class SystemUpdate(BaseModel):
+class AgentUpdate(BaseModel):
     name: str | None = None
     description: str | None = None
     category: str | None = None
@@ -32,7 +32,7 @@ class SystemUpdate(BaseModel):
     agent_config: dict | None = None
 
 
-class SystemOut(BaseModel):
+class AgentOut(BaseModel):
     id: str
     name: str
     description: str | None
@@ -79,7 +79,7 @@ class UseCaseUpdate(BaseModel):
 
 class UseCaseOut(BaseModel):
     id: str
-    system_id: str
+    agent_id: str
     name: str
     description: str | None
     trigger_text: str | None
@@ -99,12 +99,12 @@ class UseCaseOut(BaseModel):
 # --- Discovery & Testing ---
 
 class DiscoverRequest(BaseModel):
-    system_id: str
+    agent_id: str
     use_case_id: str
 
 
 class TestRequest(BaseModel):
-    system_id: str
+    agent_id: str
     use_case_id: str
     test_input: dict
 
@@ -125,7 +125,7 @@ class SpecConfig(BaseModel):
 
 class GenerateSpecRequest(BaseModel):
     agent_name: str
-    system_ids: list[str]
+    agent_ids: list[str]
     use_case_ids: list[str] = []
     config: SpecConfig | None = None
 
@@ -133,7 +133,7 @@ class GenerateSpecRequest(BaseModel):
 class AgentSpecOut(BaseModel):
     id: str
     name: str
-    system_ids: list | None
+    agent_ids: list | None
     use_case_ids: list | None
     spec_markdown: str | None
     tools_json: list | None

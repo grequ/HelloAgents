@@ -6,7 +6,7 @@ from fastapi import APIRouter, HTTPException, UploadFile, File
 from fastapi.responses import Response
 
 from workbench.models import (
-    SystemCreate, SystemUpdate, SystemOut,
+    AgentCreate, AgentUpdate, AgentOut,
     UseCaseCreate, UseCaseUpdate, UseCaseOut,
     DiscoverRequest, TestRequest,
     GenerateSpecRequest, AgentSpecOut,
@@ -25,8 +25,8 @@ router = APIRouter(prefix="/workbench", tags=["workbench"])
 @router.get("/dashboard")
 async def dashboard():
     stats = await wb_db.get_dashboard_stats()
-    systems = await wb_db.list_systems()
-    return {"stats": stats, "systems": systems}
+    agents = await wb_db.list_agents()
+    return {"stats": stats, "agents": agents}
 
 
 @router.post("/seed")
@@ -35,37 +35,37 @@ async def seed():
     return await seed_demo_data()
 
 
-# ---- Systems CRUD ----
+# ---- Agents CRUD ----
 
-@router.get("/systems", response_model=list[SystemOut])
-async def list_systems():
-    return await wb_db.list_systems()
-
-
-@router.post("/systems", response_model=SystemOut)
-async def create_system(body: SystemCreate):
-    return await wb_db.create_system(body.model_dump())
+@router.get("/agents", response_model=list[AgentOut])
+async def list_agents():
+    return await wb_db.list_agents()
 
 
-@router.get("/systems/{system_id}", response_model=SystemOut)
-async def get_system(system_id: str):
-    s = await wb_db.get_system(system_id)
+@router.post("/agents", response_model=AgentOut)
+async def create_agent(body: AgentCreate):
+    return await wb_db.create_agent(body.model_dump())
+
+
+@router.get("/agents/{agent_id}", response_model=AgentOut)
+async def get_agent(agent_id: str):
+    s = await wb_db.get_agent(agent_id)
     if not s:
-        raise HTTPException(404, "System not found")
+        raise HTTPException(404, "Agent not found")
     return s
 
 
-@router.put("/systems/{system_id}", response_model=SystemOut)
-async def update_system(system_id: str, body: SystemUpdate):
-    s = await wb_db.update_system(system_id, body.model_dump(exclude_none=True))
+@router.put("/agents/{agent_id}", response_model=AgentOut)
+async def update_agent(agent_id: str, body: AgentUpdate):
+    s = await wb_db.update_agent(agent_id, body.model_dump(exclude_none=True))
     if not s:
-        raise HTTPException(404, "System not found")
+        raise HTTPException(404, "Agent not found")
     return s
 
 
-@router.delete("/systems/{system_id}")
-async def delete_system(system_id: str):
-    await wb_db.delete_system(system_id)
+@router.delete("/agents/{agent_id}")
+async def delete_agent(agent_id: str):
+    await wb_db.delete_agent(agent_id)
     return {"ok": True}
 
 
@@ -74,55 +74,55 @@ async def get_all_interactions():
     return await wb_db.get_all_interactions()
 
 
-@router.get("/systems/{system_id}/interactions")
-async def get_interactions(system_id: str):
-    return await wb_db.get_interactions(system_id)
+@router.get("/agents/{agent_id}/interactions")
+async def get_interactions(agent_id: str):
+    return await wb_db.get_interactions(agent_id)
 
 
-@router.put("/systems/{system_id}/interactions")
-async def save_interactions(system_id: str, body: dict):
+@router.put("/agents/{agent_id}/interactions")
+async def save_interactions(agent_id: str, body: dict):
     asks = body.get("asks", [])
     provides_to = body.get("provides_to", [])
-    await wb_db.save_interactions(system_id, asks, provides_to)
-    return await wb_db.get_interactions(system_id)
+    await wb_db.save_interactions(agent_id, asks, provides_to)
+    return await wb_db.get_interactions(agent_id)
 
 
-@router.post("/systems/{system_id}/api-key")
-async def set_api_key(system_id: str, body: dict):
+@router.post("/agents/{agent_id}/api-key")
+async def set_api_key(agent_id: str, body: dict):
     key = body.get("api_key", "")
     if not key:
         raise HTTPException(400, "api_key is required")
     encrypted = encrypt_api_key(key)
-    await wb_db.set_system_api_key(system_id, encrypted)
+    await wb_db.set_agent_api_key(agent_id, encrypted)
     return {"ok": True}
 
 
-@router.post("/systems/{system_id}/upload-spec")
-async def upload_spec(system_id: str, file: UploadFile = File(...)):
+@router.post("/agents/{agent_id}/upload-spec")
+async def upload_spec(agent_id: str, file: UploadFile = File(...)):
     content = await file.read()
     try:
         spec = json.loads(content)
     except json.JSONDecodeError:
         raise HTTPException(400, "Invalid JSON file")
-    await wb_db.set_system_api_spec(system_id, spec)
+    await wb_db.set_agent_api_spec(agent_id, spec)
     return {"ok": True, "endpoint_count": len(spec.get("paths", {}))}
 
 
-@router.post("/systems/{system_id}/upload-spec-json")
-async def upload_spec_json(system_id: str, body: dict):
+@router.post("/agents/{agent_id}/upload-spec-json")
+async def upload_spec_json(agent_id: str, body: dict):
     """Accept API spec as JSON body (alternative to file upload)."""
-    await wb_db.set_system_api_spec(system_id, body)
+    await wb_db.set_agent_api_spec(agent_id, body)
     return {"ok": True, "endpoint_count": len(body.get("paths", {}))}
 
 
-@router.post("/systems/{system_id}/test-connection")
-async def test_connection(system_id: str):
-    s = await wb_db.get_system(system_id)
+@router.post("/agents/{agent_id}/test-connection")
+async def test_connection(agent_id: str):
+    s = await wb_db.get_agent(agent_id)
     if not s:
-        raise HTTPException(404, "System not found")
+        raise HTTPException(404, "Agent not found")
     if not s.get("api_base_url"):
         raise HTTPException(400, "No API base URL configured")
-    key_enc = await wb_db.get_system_api_key_enc(system_id)
+    key_enc = await wb_db.get_agent_api_key_enc(agent_id)
     api_key = decrypt_api_key(key_enc) if key_enc else ""
     import httpx
     headers = {}
@@ -138,14 +138,14 @@ async def test_connection(system_id: str):
 
 # ---- Use Cases CRUD ----
 
-@router.get("/systems/{system_id}/usecases", response_model=list[UseCaseOut])
-async def list_use_cases(system_id: str):
-    return await wb_db.list_use_cases(system_id)
+@router.get("/agents/{agent_id}/usecases", response_model=list[UseCaseOut])
+async def list_use_cases(agent_id: str):
+    return await wb_db.list_use_cases(agent_id)
 
 
-@router.post("/systems/{system_id}/usecases", response_model=UseCaseOut)
-async def create_use_case(system_id: str, body: UseCaseCreate):
-    return await wb_db.create_use_case(system_id, body.model_dump())
+@router.post("/agents/{agent_id}/usecases", response_model=UseCaseOut)
+async def create_use_case(agent_id: str, body: UseCaseCreate):
+    return await wb_db.create_use_case(agent_id, body.model_dump())
 
 
 @router.get("/usecases/{uc_id}", response_model=UseCaseOut)
@@ -186,17 +186,17 @@ async def save_discovery_data(uc_id: str, body: dict):
 
 @router.post("/discover")
 async def run_discovery(body: DiscoverRequest):
-    system = await wb_db.get_system(body.system_id)
-    if not system:
-        raise HTTPException(404, "System not found")
-    if not system.get("api_spec"):
-        raise HTTPException(400, "System has no API spec uploaded")
+    agent = await wb_db.get_agent(body.agent_id)
+    if not agent:
+        raise HTTPException(404, "Agent not found")
+    if not agent.get("api_spec"):
+        raise HTTPException(400, "Agent has no API spec uploaded")
 
     uc = await wb_db.get_use_case(body.use_case_id)
     if not uc:
         raise HTTPException(404, "Use case not found")
 
-    result = await discover(system["api_spec"], uc)
+    result = await discover(agent["api_spec"], uc)
 
     # Save discovery results
     await wb_db.save_discovery(
@@ -210,11 +210,11 @@ async def run_discovery(body: DiscoverRequest):
 
 @router.post("/test")
 async def run_live_test(body: TestRequest):
-    system = await wb_db.get_system(body.system_id)
-    if not system:
-        raise HTTPException(404, "System not found")
-    if not system.get("api_base_url"):
-        raise HTTPException(400, "System has no API base URL")
+    agent = await wb_db.get_agent(body.agent_id)
+    if not agent:
+        raise HTTPException(404, "Agent not found")
+    if not agent.get("api_base_url"):
+        raise HTTPException(400, "Agent has no API base URL")
 
     uc = await wb_db.get_use_case(body.use_case_id)
     if not uc:
@@ -222,14 +222,14 @@ async def run_live_test(body: TestRequest):
     if not uc.get("discovered_endpoints"):
         raise HTTPException(400, "Run discovery first")
 
-    key_enc = await wb_db.get_system_api_key_enc(body.system_id)
+    key_enc = await wb_db.get_agent_api_key_enc(body.agent_id)
     api_key = decrypt_api_key(key_enc) if key_enc else ""
 
     result = await run_test(
-        base_url=system["api_base_url"],
+        base_url=agent["api_base_url"],
         api_key=api_key,
-        auth_type=system.get("api_auth_type", "bearer"),
-        auth_config=system.get("api_auth_config"),
+        auth_type=agent.get("api_auth_type", "bearer"),
+        auth_config=agent.get("api_auth_config"),
         endpoints=uc["discovered_endpoints"],
         user_input=body.test_input,
         use_case=uc,
@@ -251,13 +251,13 @@ async def run_live_test(body: TestRequest):
 async def generate_spec(body: GenerateSpecRequest):
     import traceback
     try:
-        systems = []
-        for sid in body.system_ids:
-            s = await wb_db.get_system(sid)
+        agents = []
+        for sid in body.agent_ids:
+            s = await wb_db.get_agent(sid)
             if s:
-                systems.append(s)
-        if not systems:
-            raise HTTPException(400, "No valid systems found")
+                agents.append(s)
+        if not agents:
+            raise HTTPException(400, "No valid agents found")
 
         use_cases = []
         if body.use_case_ids:
@@ -266,16 +266,16 @@ async def generate_spec(body: GenerateSpecRequest):
                 if uc:
                     use_cases.append(uc)
         else:
-            for sid in body.system_ids:
+            for sid in body.agent_ids:
                 ucs = await wb_db.list_use_cases(sid)
                 use_cases.extend(ucs)
 
         config_dict = body.config.model_dump() if body.config else None
-        result = await generate(body.agent_name, systems, use_cases, config=config_dict)
+        result = await generate(body.agent_name, agents, use_cases, config=config_dict)
 
         spec = await wb_db.create_spec({
             "name": body.agent_name,
-            "system_ids": body.system_ids,
+            "agent_ids": body.agent_ids,
             "use_case_ids": [uc["id"] for uc in use_cases],
             "spec_markdown": result.get("spec_markdown", ""),
             "tools_json": result.get("tools_json", []),
@@ -283,8 +283,8 @@ async def generate_spec(body: GenerateSpecRequest):
             "skeleton_code": result.get("skeleton_code", ""),
         })
 
-        for sid in body.system_ids:
-            await wb_db.update_system_status(sid, "spec_generated")
+        for sid in body.agent_ids:
+            await wb_db.update_agent_status(sid, "spec_generated")
     except HTTPException:
         raise
     except Exception as e:

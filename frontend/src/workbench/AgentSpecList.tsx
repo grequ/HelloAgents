@@ -11,7 +11,7 @@ export default function AgentSpecList() {
       <div className="space-y-3">
         {specs.map((s) => (
           <Link
-            to={`/workbench/agents/${s.id}`}
+            to={`/workbench/specs/${s.id}`}
             key={s.id}
             className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 block no-underline hover:shadow-md transition-shadow"
           >
@@ -22,7 +22,7 @@ export default function AgentSpecList() {
               </span>
             </div>
             <div className="flex gap-3 text-[11px] text-gray-400">
-              <span>{(s.system_ids || []).length} systems</span>
+              <span>{(s.agent_ids || []).length} agents</span>
               <span>{(s.use_case_ids || []).length} use cases</span>
               <span>{s.generated_at ? new Date(s.generated_at).toLocaleDateString() : ""}</span>
             </div>
@@ -34,7 +34,7 @@ export default function AgentSpecList() {
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-8 text-center">
           <p className="text-sm text-gray-500 mb-2">No specs generated yet.</p>
           <Link to="/workbench" className="text-sm text-tedee-cyan hover:underline">
-            Go to Dashboard to create systems and generate specs
+            Go to Dashboard to create agents and generate specs
           </Link>
         </div>
       )}

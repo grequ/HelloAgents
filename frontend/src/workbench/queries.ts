@@ -1,7 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import * as api from "./api";
 import type {
-  SystemCreate,
+  AgentCreate,
   UseCaseCreate,
   SpecConfig,
   AgentSpec,
@@ -15,11 +15,11 @@ export type { AgentConfig };
 
 export const keys = {
   dashboard: ["dashboard"] as const,
-  systems: ["systems"] as const,
-  system: (id: string) => ["system", id] as const,
-  useCases: (systemId: string) => ["useCases", systemId] as const,
+  agents: ["agents"] as const,
+  agent: (id: string) => ["agent", id] as const,
+  useCases: (agentId: string) => ["useCases", agentId] as const,
   useCase: (id: string) => ["useCase", id] as const,
-  interactions: (systemId: string) => ["interactions", systemId] as const,
+  interactions: (agentId: string) => ["interactions", agentId] as const,
   specs: ["specs"] as const,
   spec: (id: string) => ["spec", id] as const,
 };
@@ -30,23 +30,23 @@ export function useDashboard() {
   return useQuery({ queryKey: keys.dashboard, queryFn: api.getDashboard });
 }
 
-export function useSystems() {
-  return useQuery({ queryKey: keys.systems, queryFn: api.listSystems });
+export function useAgents() {
+  return useQuery({ queryKey: keys.agents, queryFn: api.listAgents });
 }
 
-export function useSystem(id: string) {
+export function useAgent(id: string) {
   return useQuery({
-    queryKey: keys.system(id),
-    queryFn: () => api.getSystem(id),
+    queryKey: keys.agent(id),
+    queryFn: () => api.getAgent(id),
     enabled: !!id,
   });
 }
 
-export function useUseCases(systemId: string) {
+export function useUseCases(agentId: string) {
   return useQuery({
-    queryKey: keys.useCases(systemId),
-    queryFn: () => api.listUseCases(systemId),
-    enabled: !!systemId,
+    queryKey: keys.useCases(agentId),
+    queryFn: () => api.listUseCases(agentId),
+    enabled: !!agentId,
   });
 }
 
@@ -65,11 +65,11 @@ export function useAllInteractions() {
   });
 }
 
-export function useInteractions(systemId: string) {
+export function useInteractions(agentId: string) {
   return useQuery({
-    queryKey: keys.interactions(systemId),
-    queryFn: () => api.getInteractions(systemId),
-    enabled: !!systemId,
+    queryKey: keys.interactions(agentId),
+    queryFn: () => api.getInteractions(agentId),
+    enabled: !!agentId,
   });
 }
 
@@ -87,13 +87,13 @@ export function useSpec(id: string) {
 
 // --- Mutations ---
 
-export function useCreateSystem() {
+export function useCreateAgent() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (data: SystemCreate) => api.createSystem(data),
+    mutationFn: (data: AgentCreate) => api.createAgent(data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: keys.dashboard });
-      qc.invalidateQueries({ queryKey: keys.systems });
+      qc.invalidateQueries({ queryKey: keys.agents });
     },
   });
 }
@@ -102,9 +102,9 @@ export function useSaveAgentConfig() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ id, config }: { id: string; config: AgentConfig }) =>
-      api.updateSystem(id, { agent_config: config }),
+      api.updateAgent(id, { agent_config: config }),
     onSuccess: (_data, vars) => {
-      qc.invalidateQueries({ queryKey: keys.system(vars.id) });
+      qc.invalidateQueries({ queryKey: keys.agent(vars.id) });
     },
   });
 }
@@ -113,28 +113,28 @@ export function useSaveInteractions() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({
-      systemId,
+      agentId,
       asks,
       provides_to,
     }: {
-      systemId: string;
-      asks: { target_system_id: string; use_case_ids: string[] }[];
-      provides_to: { source_system_id: string; use_case_ids: string[] }[];
-    }) => api.saveInteractions(systemId, { asks, provides_to }),
+      agentId: string;
+      asks: { target_agent_id: string; use_case_ids: string[] }[];
+      provides_to: { source_agent_id: string; use_case_ids: string[] }[];
+    }) => api.saveInteractions(agentId, { asks, provides_to }),
     onSuccess: (_data, vars) => {
-      // Invalidate interactions for ALL systems since cross-system references changed
+      // Invalidate interactions for ALL agents since cross-agent references changed
       qc.invalidateQueries({ queryKey: ["interactions"] });
     },
   });
 }
 
-export function useDeleteSystem() {
+export function useDeleteAgent() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (id: string) => api.deleteSystem(id),
+    mutationFn: (id: string) => api.deleteAgent(id),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: keys.dashboard });
-      qc.invalidateQueries({ queryKey: keys.systems });
+      qc.invalidateQueries({ queryKey: keys.agents });
     },
   });
 }
@@ -143,9 +143,9 @@ export function useSetApiKey() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ id, apiKey }: { id: string; apiKey: string }) =>
-      api.setSystemApiKey(id, apiKey),
+      api.setAgentApiKey(id, apiKey),
     onSuccess: (_data, vars) => {
-      qc.invalidateQueries({ queryKey: keys.system(vars.id) });
+      qc.invalidateQueries({ queryKey: keys.agent(vars.id) });
     },
   });
 }
@@ -154,26 +154,26 @@ export function useUploadSpec() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ id, spec }: { id: string; spec: unknown }) =>
-      api.uploadSystemSpecJson(id, spec),
+      api.uploadAgentSpecJson(id, spec),
     onSuccess: (_data, vars) => {
-      qc.invalidateQueries({ queryKey: keys.system(vars.id) });
+      qc.invalidateQueries({ queryKey: keys.agent(vars.id) });
     },
   });
 }
 
 export function useTestConnection() {
   return useMutation({
-    mutationFn: (id: string) => api.testSystemConnection(id),
+    mutationFn: (id: string) => api.testAgentConnection(id),
   });
 }
 
 export function useCreateUseCase() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ systemId, data }: { systemId: string; data: UseCaseCreate }) =>
-      api.createUseCase(systemId, data),
+    mutationFn: ({ agentId, data }: { agentId: string; data: UseCaseCreate }) =>
+      api.createUseCase(agentId, data),
     onSuccess: (_data, vars) => {
-      qc.invalidateQueries({ queryKey: keys.useCases(vars.systemId) });
+      qc.invalidateQueries({ queryKey: keys.useCases(vars.agentId) });
       qc.invalidateQueries({ queryKey: keys.dashboard });
     },
   });
@@ -218,8 +218,8 @@ export function useSaveDiscovery() {
 
 export function useDiscover() {
   return useMutation({
-    mutationFn: ({ systemId, useCaseId }: { systemId: string; useCaseId: string }) =>
-      api.discover(systemId, useCaseId),
+    mutationFn: ({ agentId, useCaseId }: { agentId: string; useCaseId: string }) =>
+      api.discover(agentId, useCaseId),
   });
 }
 
@@ -227,14 +227,14 @@ export function useRunTest() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({
-      systemId,
+      agentId,
       useCaseId,
       testInput,
     }: {
-      systemId: string;
+      agentId: string;
       useCaseId: string;
       testInput: unknown;
-    }) => api.runTest(systemId, useCaseId, testInput),
+    }) => api.runTest(agentId, useCaseId, testInput),
     onSuccess: (_data, vars) => {
       qc.invalidateQueries({ queryKey: keys.useCase(vars.useCaseId) });
     },
@@ -246,15 +246,15 @@ export function useGenerateSpec() {
   return useMutation({
     mutationFn: ({
       agentName,
-      systemIds,
+      agentIds,
       useCaseIds,
       config,
     }: {
       agentName: string;
-      systemIds: string[];
+      agentIds: string[];
       useCaseIds: string[];
       config?: SpecConfig;
-    }) => api.generateSpec(agentName, systemIds, useCaseIds, config),
+    }) => api.generateSpec(agentName, agentIds, useCaseIds, config),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: keys.specs });
     },
@@ -289,7 +289,7 @@ export function useSeedDemoData() {
     mutationFn: () => api.seedDemoData(),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: keys.dashboard });
-      qc.invalidateQueries({ queryKey: keys.systems });
+      qc.invalidateQueries({ queryKey: keys.agents });
     },
   });
 }
