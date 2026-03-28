@@ -312,27 +312,34 @@ export default function AgentDetail() {
       {/* Section A: API & Technology */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
         <h3 className="font-semibold text-text-primary mb-3">API & Technology</h3>
-        <div className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm mb-4">
-          <div><span className="text-gray-500">Type:</span> <span className="text-text-primary">{agent.api_type}</span></div>
-          <div><span className="text-gray-500">Base URL:</span> <span className="text-text-primary">{agent.api_base_url || "Not set"}</span></div>
-          <div><span className="text-gray-500">Auth:</span> <span className="text-text-primary">{agent.api_auth_type}</span></div>
-          <div><span className="text-gray-500">API Key:</span> <span className="text-text-primary">{agent.has_api_key ? "Set" : "Not set"}</span></div>
-          <div className="col-span-2"><span className="text-gray-500">API Spec:</span> <span className="text-text-primary">{agent.has_api_spec ? `Loaded (${agent.api_spec_endpoint_count} endpoints)` : "Not uploaded"}</span></div>
-        </div>
-        <div className="space-y-3 mb-5 pb-5 border-b border-gray-100">
-          <div className="flex gap-2">
-            <input type="password" className={`${inp} flex-1`} placeholder="API Key" value={apiKeyInput} onChange={(e) => setApiKeyInput(e.target.value)} />
-            <button className={btnGhostDefault} onClick={async () => { if (apiKeyInput) { await setApiKey.mutateAsync({ id: id!, apiKey: apiKeyInput }); setApiKeyInput(""); } }}>Set Key</button>
-          </div>
-          <div className="flex gap-2">
-            <textarea className={`${inp} flex-1`} placeholder="Paste OpenAPI/Swagger JSON spec..." rows={3} value={specInput} onChange={(e) => setSpecInput(e.target.value)} />
-            <button className={`${btnGhostDefault} self-start`} onClick={handleUploadSpec}>Upload Spec</button>
-          </div>
-          <div className="flex items-center gap-3">
-            <button className={btnGhostDefault} onClick={() => testConn.mutate(id!)} disabled={testConn.isPending}>Test Connection</button>
-            {testConn.data && <span className={`text-xs font-medium ${testConn.data.ok ? "text-green-600" : "text-red-600"}`}>{testConn.data.ok ? `Connected (${testConn.data.status_code})` : `Failed: ${testConn.data.error}`}</span>}
-          </div>
-        </div>
+        {(() => {
+          const isMcp = agent.api_type === "mcp";
+          return (<>
+            <div className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm mb-4">
+              <div><span className="text-gray-500">Type:</span> <span className="text-text-primary">{isMcp ? "MCP Server" : agent.api_type}</span></div>
+              <div><span className="text-gray-500">{isMcp ? "Server URI:" : "Base URL:"}</span> <span className="text-text-primary">{agent.api_base_url || "Not set"}</span></div>
+              <div><span className="text-gray-500">Auth:</span> <span className="text-text-primary">{agent.api_auth_type}</span></div>
+              <div><span className="text-gray-500">{isMcp ? "Auth Token:" : "API Key:"}</span> <span className="text-text-primary">{agent.has_api_key ? "Set" : "Not set"}</span></div>
+              <div className="col-span-2"><span className="text-gray-500">{isMcp ? "Tool Definitions:" : "API Spec:"}</span> <span className="text-text-primary">{agent.has_api_spec ? `Loaded (${agent.api_spec_endpoint_count} ${isMcp ? "tools" : "endpoints"})` : "Not uploaded"}</span></div>
+            </div>
+            <div className="space-y-3 mb-5 pb-5 border-b border-gray-100">
+              <div className="flex gap-2">
+                <input type="password" className={`${inp} flex-1`} placeholder={isMcp ? "Auth token" : "API Key"} value={apiKeyInput} onChange={(e) => setApiKeyInput(e.target.value)} />
+                <button className={btnGhostDefault} onClick={async () => { if (apiKeyInput) { await setApiKey.mutateAsync({ id: id!, apiKey: apiKeyInput }); setApiKeyInput(""); } }}>{isMcp ? "Set Token" : "Set Key"}</button>
+              </div>
+              <div className="flex gap-2">
+                <textarea className={`${inp} flex-1`} placeholder={isMcp ? "Paste MCP tool definitions JSON (array of tools with name, description, inputSchema)..." : "Paste OpenAPI/Swagger JSON spec..."} rows={3} value={specInput} onChange={(e) => setSpecInput(e.target.value)} />
+                <button className={`${btnGhostDefault} self-start`} onClick={handleUploadSpec}>{isMcp ? "Upload Tools" : "Upload Spec"}</button>
+              </div>
+              {!isMcp && (
+                <div className="flex items-center gap-3">
+                  <button className={btnGhostDefault} onClick={() => testConn.mutate(id!)} disabled={testConn.isPending}>Test Connection</button>
+                  {testConn.data && <span className={`text-xs font-medium ${testConn.data.ok ? "text-green-600" : "text-red-600"}`}>{testConn.data.ok ? `Connected (${testConn.data.status_code})` : `Failed: ${testConn.data.error}`}</span>}
+                </div>
+              )}
+            </div>
+          </>);
+        })()}
         <div className="grid grid-cols-2 gap-3 mb-3">
           <div><label className="block text-xs text-gray-500 mb-1">Technology Stack</label>
             <select className={inp} value={genConfig.tech_stack} onChange={(e) => setGenConfig({ ...genConfig, tech_stack: e.target.value })}>

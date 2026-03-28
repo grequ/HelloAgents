@@ -26,7 +26,10 @@ def _row_to_agent(row: dict) -> dict:
     row["api_spec"] = spec
     row["has_api_spec"] = spec is not None
     endpoint_count = 0
-    if spec and isinstance(spec, dict) and "paths" in spec:
+    if spec and isinstance(spec, list):
+        # MCP tool definitions — array of tools
+        endpoint_count = len(spec)
+    elif spec and isinstance(spec, dict) and "paths" in spec:
         for path_methods in spec["paths"].values():
             endpoint_count += len([m for m in path_methods if m in ("get", "post", "put", "patch", "delete")])
     row["api_spec_endpoint_count"] = endpoint_count

@@ -183,23 +183,33 @@ async def suggest_use_case(body: dict):
 
     # Build context from agent info + API spec
     api_spec_summary = ""
+    is_mcp = agent.get("api_type") == "mcp"
     if agent.get("api_spec"):
         spec = agent["api_spec"]
-        paths = spec.get("paths", {})
-        # Summarize first 30 endpoints
-        endpoint_lines = []
-        for path, methods in list(paths.items())[:30]:
-            for method, details in methods.items():
-                if method in ("get", "post", "put", "patch", "delete"):
-                    summary = details.get("summary", details.get("description", ""))[:80]
-                    endpoint_lines.append(f"  {method.upper()} {path} — {summary}")
-        api_spec_summary = "\n".join(endpoint_lines)
+        if is_mcp and isinstance(spec, list):
+            # MCP tool definitions — array of {name, description, inputSchema}
+            tool_lines = []
+            for tool in spec[:30]:
+                tname = tool.get("name", "unnamed")
+                tdesc = tool.get("description", "")[:80]
+                tool_lines.append(f"  {tname} — {tdesc}")
+            api_spec_summary = "\n".join(tool_lines)
+        elif isinstance(spec, dict) and "paths" in spec:
+            # OpenAPI spec
+            endpoint_lines = []
+            for path, methods in list(spec["paths"].items())[:30]:
+                for method, details in methods.items():
+                    if method in ("get", "post", "put", "patch", "delete"):
+                        summary = details.get("summary", details.get("description", ""))[:80]
+                        endpoint_lines.append(f"  {method.upper()} {path} — {summary}")
+            api_spec_summary = "\n".join(endpoint_lines)
 
     import anthropic
     import os
     client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
 
-    api_section = f"API endpoints:\n{api_spec_summary}" if api_spec_summary else "No API spec uploaded yet."
+    spec_label = "MCP tools" if is_mcp else "API endpoints"
+    api_section = f"{spec_label}:\n{api_spec_summary}" if api_spec_summary else "No API spec uploaded yet."
 
     prompt = (
         "You are helping design an AI agent use case. Given the use case name, description, and the agent's API, suggest the fields below.\n\n"

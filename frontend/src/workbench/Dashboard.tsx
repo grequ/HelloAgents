@@ -94,6 +94,7 @@ export default function Dashboard() {
             >
               <option value="rest">REST API</option>
               <option value="graphql">GraphQL</option>
+              <option value="mcp">MCP Server</option>
               <option value="soap">SOAP</option>
               <option value="grpc">gRPC</option>
               <option value="database">Database</option>
