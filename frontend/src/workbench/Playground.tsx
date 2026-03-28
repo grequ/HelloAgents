@@ -5,6 +5,7 @@ import {
   useAgent, useUseCase, useUpdateUseCase, useCreateUseCase,
   useDiscover, useRunTest, useSaveDiscovery, useDeleteUseCase,
 } from "./queries";
+import { suggestUseCase } from "./api";
 import { btnPrimary, btnSecondary, btnDanger, btnSuccess, btnGhost, btnGhostDanger, inp } from "./ui";
 
 function AutoTextarea({ value, onChange, placeholder, className }: {
@@ -53,17 +54,18 @@ export default function Playground() {
   const runTestMut = useRunTest();
   const saveDiscMut = useSaveDiscovery();
 
-  // Use case definition fields (editable for both new and existing)
+  // Use case definition fields
   const [ucName, setUcName] = useState("");
   const [ucDesc, setUcDesc] = useState("");
   const [ucTrigger, setUcTrigger] = useState("");
   const [ucInput, setUcInput] = useState("");
   const [ucOutput, setUcOutput] = useState("");
   const [ucFreq, setUcFreq] = useState("");
-  const [ucPriority, setUcPriority] = useState("medium");
   const [ucIsWrite, setUcIsWrite] = useState(false);
+  const [ucSampleConv, setUcSampleConv] = useState("");
   const [ucDirty, setUcDirty] = useState(false);
   const [ucSaved, setUcSaved] = useState(false);
+  const [aiSuggesting, setAiSuggesting] = useState(false);
 
   // Discovery state
   const [endpoints, setEndpoints] = useState<Endpoint[]>([]);
@@ -84,8 +86,8 @@ export default function Playground() {
       setUcInput(uc.user_input || "");
       setUcOutput(uc.expected_output || "");
       setUcFreq(uc.frequency || "");
-      setUcPriority(uc.priority || "medium");
       setUcIsWrite(uc.is_write || false);
+      setUcSampleConv(uc.sample_conversation || "");
       setUcDirty(false);
       if (uc.discovered_endpoints) setEndpoints(uc.discovered_endpoints);
       if (uc.discovered_behavior) setBehavior(uc.discovered_behavior);
@@ -95,34 +97,56 @@ export default function Playground() {
     }
   }, [uc]);
 
-  // Mark dirty on any definition field change
   const setField = <T,>(setter: React.Dispatch<React.SetStateAction<T>>) => (v: T) => {
     setter(v);
     setUcDirty(true);
   };
 
-  // --- Handlers ---
+  // --- AI Discovery ---
+
+  const handleAiSuggest = async () => {
+    if (!agentId || !ucName.trim() || !ucDesc.trim()) return;
+    setAiSuggesting(true);
+    try {
+      const suggestion = await suggestUseCase(agentId, ucName, ucDesc);
+      if (suggestion.error) {
+        alert("AI suggestion failed: " + suggestion.error);
+      } else {
+        if (suggestion.trigger_text) { setUcTrigger(suggestion.trigger_text); }
+        if (suggestion.user_input) { setUcInput(suggestion.user_input); }
+        if (suggestion.expected_output) { setUcOutput(suggestion.expected_output); }
+        if (suggestion.frequency) { setUcFreq(suggestion.frequency); }
+        if (suggestion.is_write !== undefined) { setUcIsWrite(suggestion.is_write); }
+        if (suggestion.sample_conversation) { setUcSampleConv(suggestion.sample_conversation); }
+        setUcDirty(true);
+      }
+    } catch (e: unknown) {
+      alert("AI suggestion failed: " + (e instanceof Error ? e.message : "Unknown error"));
+    } finally {
+      setAiSuggesting(false);
+    }
+  };
+
+  // --- Save ---
+
+  const buildData = (): UseCaseCreate => ({
+    name: ucName, description: ucDesc, trigger_text: ucTrigger,
+    user_input: ucInput, expected_output: ucOutput, frequency: ucFreq,
+    is_write: ucIsWrite, sample_conversation: ucSampleConv,
+  });
 
   const handleSaveUseCase = async () => {
     if (isNew) {
-      // Create
       if (!ucName.trim()) { alert("Name is required"); return; }
       try {
-        const created = await createUcMut.mutateAsync({
-          agentId: agentId!,
-          data: { name: ucName, description: ucDesc, trigger_text: ucTrigger, user_input: ucInput, expected_output: ucOutput, frequency: ucFreq, priority: ucPriority, is_write: ucIsWrite },
-        });
+        const created = await createUcMut.mutateAsync({ agentId: agentId!, data: buildData() });
         nav(`/workbench/agents/${agentId}/usecases/${created.id}`, { replace: true });
       } catch (e: unknown) {
         alert("Create failed: " + (e instanceof Error ? e.message : "Unknown error"));
       }
     } else {
-      // Update
       try {
-        await updateUcMut.mutateAsync({
-          id: ucId!,
-          data: { name: ucName, description: ucDesc, trigger_text: ucTrigger, user_input: ucInput, expected_output: ucOutput, frequency: ucFreq, priority: ucPriority, is_write: ucIsWrite },
-        });
+        await updateUcMut.mutateAsync({ id: ucId!, data: buildData() });
         setUcDirty(false);
         setUcSaved(true);
         setTimeout(() => setUcSaved(false), 2000);
@@ -132,6 +156,8 @@ export default function Playground() {
       }
     }
   };
+
+  // --- Discovery & Test handlers ---
 
   const handleDiscover = async () => {
     try {
@@ -179,6 +205,7 @@ export default function Playground() {
 
   const testSteps = (testResult?.steps as Array<Record<string, unknown>>) || [];
   const status = isNew ? "new" : uc?.status || "draft";
+  const canAiSuggest = ucName.trim().length > 0 && ucDesc.trim().length > 0;
 
   return (
     <div className="max-w-7xl mx-auto">
@@ -211,8 +238,35 @@ export default function Playground() {
             </div>
             <div>
               <label className="block text-xs text-gray-500 mb-1">Description</label>
-              <input className={inp} value={ucDesc} onChange={(e) => setField(setUcDesc)(e.target.value)} placeholder="Short summary" />
+              <input className={inp} value={ucDesc} onChange={(e) => setField(setUcDesc)(e.target.value)} placeholder="Short summary of what this use case does" />
             </div>
+
+            {/* AI Discovery button */}
+            <button
+              className={`w-full flex items-center justify-center gap-2 rounded-lg py-2.5 text-sm font-semibold transition-colors ${
+                canAiSuggest && !aiSuggesting
+                  ? "bg-tedee-navy text-white hover:bg-tedee-navy/90"
+                  : "bg-gray-100 text-gray-400 cursor-not-allowed"
+              }`}
+              onClick={handleAiSuggest}
+              disabled={!canAiSuggest || aiSuggesting}
+            >
+              {aiSuggesting ? (
+                <>
+                  <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>
+                  AI is analyzing...
+                </>
+              ) : (
+                <>
+                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8 1v2M8 13v2M1 8h2M13 8h2M3.05 3.05l1.41 1.41M11.54 11.54l1.41 1.41M3.05 12.95l1.41-1.41M11.54 4.46l1.41-1.41" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/></svg>
+                  AI Discovery
+                </>
+              )}
+            </button>
+            {!canAiSuggest && (
+              <p className="text-[11px] text-gray-400 -mt-1">Fill in Name and Description to enable AI Discovery</p>
+            )}
+
             <div>
               <label className="block text-xs text-gray-500 mb-1">Trigger</label>
               <AutoTextarea className={inp} value={ucTrigger} onChange={setField(setUcTrigger)} placeholder="What question or event triggers this?" />
@@ -225,23 +279,26 @@ export default function Playground() {
               <label className="block text-xs text-gray-500 mb-1">Expected Output</label>
               <AutoTextarea className={inp} value={ucOutput} onChange={setField(setUcOutput)} placeholder="What should the response contain?" />
             </div>
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="block text-xs text-gray-500 mb-1">Frequency</label>
                 <input className={inp} value={ucFreq} onChange={(e) => setField(setUcFreq)(e.target.value)} placeholder="~200/day" />
               </div>
-              <div>
-                <label className="block text-xs text-gray-500 mb-1">Priority</label>
-                <select className={inp} value={ucPriority} onChange={(e) => setField(setUcPriority)(e.target.value)}>
-                  <option value="high">High</option><option value="medium">Medium</option><option value="low">Low</option>
-                </select>
-              </div>
               <div className="flex items-end pb-2">
                 <label className="flex items-center gap-1.5 text-xs text-gray-600">
                   <input type="checkbox" checked={ucIsWrite} onChange={(e) => setField(setUcIsWrite)(e.target.checked)} />
-                  Write op
+                  Write operation
                 </label>
               </div>
+            </div>
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">Sample Conversation</label>
+              <AutoTextarea
+                className={`${inp} font-mono text-xs`}
+                value={ucSampleConv}
+                onChange={setField(setUcSampleConv)}
+                placeholder={"User: Where is my order ORD-001?\nAgent: Your order ORD-001 is currently in transit...\nUser: When will it arrive?\nAgent: The estimated delivery is March 30."}
+              />
             </div>
           </div>
 
@@ -262,11 +319,11 @@ export default function Playground() {
           )}
         </div>
 
-        {/* Right — Discovery & Testing (only for saved use cases) */}
+        {/* Right — Discovery & Testing */}
         <div className="space-y-4">
           {isNew ? (
             <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-8 text-center">
-              <p className="text-sm text-gray-500 mb-2">Save the use case first to unlock discovery and testing.</p>
+              <p className="text-sm text-gray-500 mb-2">Save the use case first to unlock endpoint discovery and live testing.</p>
               <p className="text-xs text-gray-400">Fill in the definition on the left, then click "Create & Save".</p>
             </div>
           ) : (

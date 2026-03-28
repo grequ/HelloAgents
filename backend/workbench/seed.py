@@ -72,7 +72,6 @@ DEMO_AGENTS = [
                 "expected_output": "List of matching products with name, price, rating, and availability",
                 "frequency": "~500/day",
                 "is_write": False,
-                "priority": "high",
             },
             {
                 "name": "Get product details",
@@ -82,7 +81,6 @@ DEMO_AGENTS = [
                 "expected_output": "Full product details: title, description, price, discount, rating, stock count, brand, category, images",
                 "frequency": "~300/day",
                 "is_write": False,
-                "priority": "high",
             },
             {
                 "name": "Check product availability",
@@ -92,7 +90,6 @@ DEMO_AGENTS = [
                 "expected_output": "Stock count and availability status (in stock / low stock / out of stock)",
                 "frequency": "~200/day",
                 "is_write": False,
-                "priority": "high",
             },
             {
                 "name": "Browse products by category",
@@ -102,7 +99,6 @@ DEMO_AGENTS = [
                 "expected_output": "List of products in that category with prices and ratings",
                 "frequency": "~150/day",
                 "is_write": False,
-                "priority": "medium",
             },
             {
                 "name": "Compare product prices",
@@ -112,7 +108,6 @@ DEMO_AGENTS = [
                 "expected_output": "Side-by-side comparison of products with prices, discounts, and ratings",
                 "frequency": "~80/day",
                 "is_write": False,
-                "priority": "medium",
             },
         ],
     },
@@ -176,7 +171,6 @@ DEMO_AGENTS = [
                 "expected_output": "Full name, email, phone, address, company",
                 "frequency": "~400/day",
                 "is_write": False,
-                "priority": "high",
             },
             {
                 "name": "Find customer by name",
@@ -186,7 +180,6 @@ DEMO_AGENTS = [
                 "expected_output": "Matching customer profiles with IDs",
                 "frequency": "~200/day",
                 "is_write": False,
-                "priority": "high",
             },
             {
                 "name": "View customer order history",
@@ -196,7 +189,6 @@ DEMO_AGENTS = [
                 "expected_output": "List of carts/orders with products, quantities, and totals",
                 "frequency": "~150/day",
                 "is_write": False,
-                "priority": "medium",
             },
         ],
     },
@@ -252,7 +244,6 @@ DEMO_AGENTS = [
                 "expected_output": "List of items with product names, quantities, prices, and order total",
                 "frequency": "~300/day",
                 "is_write": False,
-                "priority": "high",
             },
             {
                 "name": "Check order total and discounts",
@@ -262,7 +253,6 @@ DEMO_AGENTS = [
                 "expected_output": "Total amount, discounted total, savings amount",
                 "frequency": "~150/day",
                 "is_write": False,
-                "priority": "medium",
             },
             {
                 "name": "Find all orders for a customer",
@@ -272,7 +262,6 @@ DEMO_AGENTS = [
                 "expected_output": "List of all orders with dates, totals, and item counts",
                 "frequency": "~100/day",
                 "is_write": False,
-                "priority": "medium",
             },
             {
                 "name": "Identify items in an order for return",
@@ -282,7 +271,6 @@ DEMO_AGENTS = [
                 "expected_output": "Matching item details with price, quantity, and whether it's returnable",
                 "frequency": "~50/day",
                 "is_write": False,
-                "priority": "medium",
             },
         ],
     },

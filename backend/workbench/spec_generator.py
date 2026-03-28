@@ -52,9 +52,10 @@ async def generate(agent_name: str, agents: list[dict], use_cases: list[dict],
             "user_input": uc.get("user_input", ""),
             "expected_output": uc.get("expected_output", ""),
             "is_write": uc.get("is_write", False),
-            "priority": uc.get("priority", "medium"),
             "frequency": uc.get("frequency", ""),
         }
+        if uc.get("sample_conversation"):
+            entry["sample_conversation"] = uc["sample_conversation"]
         if uc.get("discovered_endpoints"):
             entry["discovered_endpoints"] = uc["discovered_endpoints"]
         if uc.get("discovered_behavior"):

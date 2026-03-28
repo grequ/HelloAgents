@@ -93,6 +93,28 @@ async def ensure_schema():
             if row[0] == 0:
                 await cur.execute("ALTER TABLE wb_agents ADD COLUMN agent_config JSON")
 
+            # Add sample_conversation column to wb_use_cases if missing
+            await cur.execute("""
+                SELECT COUNT(*) FROM information_schema.COLUMNS
+                WHERE TABLE_SCHEMA = DATABASE()
+                  AND TABLE_NAME = 'wb_use_cases'
+                  AND COLUMN_NAME = 'sample_conversation'
+            """)
+            row = await cur.fetchone()
+            if row[0] == 0:
+                await cur.execute("ALTER TABLE wb_use_cases ADD COLUMN sample_conversation TEXT AFTER expected_output")
+
+            # Drop priority column from wb_use_cases if it exists
+            await cur.execute("""
+                SELECT COUNT(*) FROM information_schema.COLUMNS
+                WHERE TABLE_SCHEMA = DATABASE()
+                  AND TABLE_NAME = 'wb_use_cases'
+                  AND COLUMN_NAME = 'priority'
+            """)
+            row = await cur.fetchone()
+            if row[0] > 0:
+                await cur.execute("ALTER TABLE wb_use_cases DROP COLUMN priority")
+
             # Create interactions table if missing
             await cur.execute("""
                 CREATE TABLE IF NOT EXISTS wb_agent_interactions (
@@ -214,7 +236,7 @@ async def list_use_cases(agent_id: str) -> list[dict]:
     pool = await get_pool()
     async with pool.acquire() as conn:
         async with conn.cursor(dict_cursor()) as cur:
-            await cur.execute("SELECT * FROM wb_use_cases WHERE agent_id = %s ORDER BY priority DESC, name",
+            await cur.execute("SELECT * FROM wb_use_cases WHERE agent_id = %s ORDER BY name",
                               (agent_id,))
             rows = await cur.fetchall()
     return [_row_to_use_case(r) for r in rows]
@@ -235,11 +257,11 @@ async def create_use_case(agent_id: str, data: dict) -> dict:
     uc_id = _new_id()
     pool = await get_pool()
     cols = ["id", "agent_id", "name", "description", "trigger_text", "user_input",
-            "expected_output", "frequency", "is_write", "priority"]
+            "expected_output", "frequency", "is_write", "sample_conversation"]
     vals = [uc_id, agent_id, data["name"], data.get("description", ""),
             data.get("trigger_text", ""), data.get("user_input", ""),
             data.get("expected_output", ""), data.get("frequency", ""),
-            data.get("is_write", False), data.get("priority", "medium")]
+            data.get("is_write", False), data.get("sample_conversation", "")]
     placeholders = ", ".join(["%s"] * len(cols))
     col_names = ", ".join(cols)
     async with pool.acquire() as conn:

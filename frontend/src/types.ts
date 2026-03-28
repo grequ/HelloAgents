@@ -98,7 +98,7 @@ export interface UseCase {
   expected_output: string;
   frequency: string;
   is_write: boolean;
-  priority: "high" | "medium" | "low";
+  sample_conversation?: string;
   status: string;
   discovered_endpoints?: Endpoint[];
   discovered_behavior?: string;
@@ -115,7 +115,7 @@ export interface UseCaseCreate {
   expected_output?: string;
   frequency?: string;
   is_write?: boolean;
-  priority?: string;
+  sample_conversation?: string;
 }
 
 // --- Discovery ---

@@ -170,6 +170,76 @@ async def delete_use_case(uc_id: str):
     return {"ok": True}
 
 
+@router.post("/suggest-use-case")
+async def suggest_use_case(body: dict):
+    """AI suggests trigger, user_input, expected_output, sample_conversation from name + description + agent API spec."""
+    agent_id = body.get("agent_id", "")
+    name = body.get("name", "")
+    description = body.get("description", "")
+
+    agent = await wb_db.get_agent(agent_id)
+    if not agent:
+        raise HTTPException(404, "Agent not found")
+
+    # Build context from agent info + API spec
+    api_spec_summary = ""
+    if agent.get("api_spec"):
+        spec = agent["api_spec"]
+        paths = spec.get("paths", {})
+        # Summarize first 30 endpoints
+        endpoint_lines = []
+        for path, methods in list(paths.items())[:30]:
+            for method, details in methods.items():
+                if method in ("get", "post", "put", "patch", "delete"):
+                    summary = details.get("summary", details.get("description", ""))[:80]
+                    endpoint_lines.append(f"  {method.upper()} {path} — {summary}")
+        api_spec_summary = "\n".join(endpoint_lines)
+
+    import anthropic
+    import os
+    client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
+
+    api_section = f"API endpoints:\n{api_spec_summary}" if api_spec_summary else "No API spec uploaded yet."
+
+    prompt = (
+        "You are helping design an AI agent use case. Given the use case name, description, and the agent's API, suggest the fields below.\n\n"
+        f"Agent: {agent.get('name', '')}\n"
+        f"Agent description: {agent.get('description', '')}\n"
+        f"Agent API type: {agent.get('api_type', 'rest')}\n"
+        f"{api_section}\n\n"
+        f"Use case name: {name}\n"
+        f"Use case description: {description}\n\n"
+        "Return a JSON object with these fields:\n"
+        '- "trigger_text": What question or event triggers this use case? (1-2 sentences)\n'
+        '- "user_input": What information does the user/caller provide? (specific parameter names)\n'
+        '- "expected_output": What should the response contain? (specific data fields)\n'
+        '- "frequency": Estimated frequency (e.g. "~100/day", "~10/week")\n'
+        '- "is_write": boolean — does this modify data?\n'
+        '- "sample_conversation": A realistic 3-4 turn example dialogue between a user and the agent, formatted as:\n'
+        "  User: ...\n  Agent: ...\n  User: ...\n  Agent: ...\n\n"
+        "Return ONLY the JSON object, no markdown fences."
+    )
+
+    response = client.messages.create(
+        model="claude-sonnet-4-20250514",
+        max_tokens=1000,
+        messages=[{"role": "user", "content": prompt}],
+    )
+
+    text = response.content[0].text.strip()
+    # Parse JSON (strip markdown fences if present)
+    import re
+    text = re.sub(r'^```json\s*', '', text)
+    text = re.sub(r'\s*```$', '', text)
+
+    try:
+        result = json.loads(text)
+    except json.JSONDecodeError:
+        result = {"error": "Failed to parse AI response", "raw": text}
+
+    return result
+
+
 # ---- Discovery & Testing ----
 
 @router.put("/usecases/{uc_id}/discovery")

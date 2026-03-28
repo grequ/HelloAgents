@@ -56,13 +56,11 @@ function generateRoleFromUseCases(agent: Agent, ucs: UseCase[]): string {
   const domain = agent.category || "general";
   const readUcs = ucs.filter((u) => !u.is_write);
   const writeUcs = ucs.filter((u) => u.is_write);
-  const highPri = ucs.filter((u) => u.priority === "high");
   let role = `You are the ${agent.name} Agent, a specialized AI assistant responsible for the ${domain} domain. `;
   role += `You have access to the ${agent.name} system via its ${agent.api_type?.toUpperCase() || "REST"} API. `;
   if (readUcs.length > 0) role += `\n\nYour primary read operations include: ${readUcs.map((u) => u.name.toLowerCase()).join(", ")}. `;
   if (writeUcs.length > 0) role += `Your write operations include: ${writeUcs.map((u) => u.name.toLowerCase()).join(", ")}. Write operations require explicit user confirmation. `;
   role += `\n\nBehavior guidelines:\n- Always use ONLY data from tool results. Never fabricate information.\n- Be concise and factual.\n- If a tool call fails, explain what happened and suggest alternatives.\n- If the request is outside your domain, say so clearly.\n`;
-  if (highPri.length > 0) role += `- Prioritize: ${highPri.map((u) => u.name).join(", ")}.\n`;
   role += `- For write operations, confirm with the user before proceeding.\n- Never expose internal IDs, API keys, or technical details.`;
   return role;
 }
@@ -456,7 +454,6 @@ export default function AgentDetail() {
               <div className="flex items-center justify-between mb-1">
                 <Link to={`/workbench/agents/${id}/usecases/${uc.id}`} className="font-medium text-sm text-tedee-navy hover:underline">{uc.name}</Link>
                 <div className="flex gap-1.5">
-                  <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${uc.priority === "high" ? "bg-red-100 text-red-700" : uc.priority === "medium" ? "bg-amber-100 text-amber-700" : "bg-gray-100 text-gray-600"}`}>{uc.priority}</span>
                   {uc.is_write && <span className="text-[10px] px-1.5 py-0.5 rounded bg-orange-100 text-orange-700 font-medium">WRITE</span>}
                   <span className="text-[10px] px-1.5 py-0.5 rounded bg-gray-100 text-gray-600 font-medium">{uc.status}</span>
                 </div>

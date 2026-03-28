@@ -129,6 +129,29 @@ export async function saveDiscovery(
   return request<void>("PUT", `/usecases/${useCaseId}/discovery`, data);
 }
 
+// AI Suggest
+export interface AiSuggestion {
+  trigger_text?: string;
+  user_input?: string;
+  expected_output?: string;
+  frequency?: string;
+  is_write?: boolean;
+  sample_conversation?: string;
+  error?: string;
+}
+
+export async function suggestUseCase(
+  agentId: string,
+  name: string,
+  description: string,
+): Promise<AiSuggestion> {
+  return request<AiSuggestion>("POST", "/suggest-use-case", {
+    agent_id: agentId,
+    name,
+    description,
+  });
+}
+
 // Discover & Test
 export async function discover(agentId: string, useCaseId: string): Promise<DiscoveryResult> {
   return request<DiscoveryResult>("POST", "/discover", {

@@ -63,7 +63,7 @@ class UseCaseCreate(BaseModel):
     expected_output: str = ""
     frequency: str = ""
     is_write: bool = False
-    priority: str = "medium"
+    sample_conversation: str = ""
 
 
 class UseCaseUpdate(BaseModel):
@@ -74,7 +74,7 @@ class UseCaseUpdate(BaseModel):
     expected_output: str | None = None
     frequency: str | None = None
     is_write: bool | None = None
-    priority: str | None = None
+    sample_conversation: str | None = None
 
 
 class UseCaseOut(BaseModel):
@@ -87,7 +87,7 @@ class UseCaseOut(BaseModel):
     expected_output: str | None
     frequency: str | None
     is_write: bool
-    priority: str
+    sample_conversation: str | None
     discovered_endpoints: list | None = None
     discovered_behavior: str | None = None
     test_results: list | None = None
