@@ -49,7 +49,7 @@ export default function WorkbenchLayout() {
       {/* Sidebar */}
       <aside className="w-[260px] shrink-0 bg-tedee-navy flex flex-col text-gray-300">
         <div className="px-6 pt-5 pb-4">
-          <h2 className="text-lg font-bold text-white tracking-tight">HelloAgents</h2>
+          <h2 className="text-lg font-bold text-white tracking-tight">AgentForge</h2>
         </div>
 
         <nav className="flex-1 overflow-y-auto">

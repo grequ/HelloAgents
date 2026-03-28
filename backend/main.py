@@ -28,7 +28,7 @@ async def lifespan(app: FastAPI):
     await db.close_pool()
 
 
-app = FastAPI(title="HelloAgents", lifespan=lifespan)
+app = FastAPI(title="AgentForge", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
