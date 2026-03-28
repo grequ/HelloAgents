@@ -303,7 +303,7 @@ export default function AgentDetail() {
             {saved ? "Saved!" : isSaving ? "Saving..." : "Save"}
           </button>
           <button className={btnPrimary} onClick={handleGenerate} disabled={genSpec.isPending || useCases.length === 0}>
-            {genSpec.isPending ? "Generating..." : "Generate Agent Spec"}
+            {genSpec.isPending ? "Generating..." : "Generate"}
           </button>
           <button className={btnDanger} onClick={async () => { if (confirm("Delete this agent and all its use cases?")) { await deleteAg.mutateAsync(id!); nav("/workbench"); } }}>
             Delete
