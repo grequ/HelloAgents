@@ -94,27 +94,30 @@ export default function Trace({ steps }: TraceProps) {
     return (
       <div className="flex flex-col h-full bg-white rounded-xl shadow-sm border border-gray-100 p-5">
         <h2 className="text-lg font-bold text-tedee-navy mb-4">Agent Orchestration Trace</h2>
-        <div className="flex-1 flex flex-col items-center justify-center text-gray-400">
-          <pre className="text-[11px] leading-snug mb-4 font-mono">{`  Customer Message
-        |
-        v
-  +---------------------+
-  | Support Orchestrator |  <- AI decides who to ask
-  | (Claude LLM)        |
-  +--+--------------+---+
-     |              |
-     v              v
-  +--------+   +---------+
-  |Logistics|   | Payment |
-  |  Agent  |   |  Agent  |
-  |(Claude) |   |(Claude) |
-  +-+--+--+-+   +---------+
-   |  |  |
-   v  v  v
-  [WMS][Carrier][Customs]`}</pre>
-          <p className="text-sm">Send a message to see the full orchestration trace.</p>
-          <p className="text-xs mt-1 text-gray-300">
-            Watch how the AI decides which agents and systems to query.
+        <div className="flex-1 flex flex-col items-center justify-center text-gray-400 px-6">
+          <pre className="text-sm leading-relaxed mb-6 font-mono whitespace-pre">{`
+         Customer Message
+               |
+               v
+  +---------------------------+
+  |   Support Orchestrator    |  <-- AI decides who to ask
+  |       (Claude LLM)        |
+  +-----+---------------+-----+
+        |               |
+        v               v
+  +-----------+   +------------+
+  | Logistics |   |  Payment   |
+  |   Agent   |   |   Agent    |
+  | (Claude)  |   |  (Claude)  |
+  +--+--+--+--+   +------------+
+     |  |  |
+     v  v  v
+  +-----+ +-------+ +--------+
+  | WMS | |Carrier| |Customs |
+  +-----+ +-------+ +--------+`}</pre>
+          <p className="text-base text-gray-500">Send a message to see the full orchestration trace.</p>
+          <p className="text-sm mt-2 text-gray-300">
+            Watch how the AI decides which agents and systems to query — no hardcoded rules.
           </p>
         </div>
       </div>
