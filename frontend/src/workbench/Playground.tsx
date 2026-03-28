@@ -77,9 +77,12 @@ export default function Playground() {
   const [testInputStr, setTestInputStr] = useState("");
   const [testResult, setTestResult] = useState<Record<string, unknown> | null>(null);
 
-  // Load existing use case into editable fields
+  // Load use case definition fields only on first load (not on refetch after discovery)
+  const ucLoadedRef = useRef(false);
   useEffect(() => {
-    if (uc) {
+    if (!uc) return;
+    if (!ucLoadedRef.current) {
+      // First load — populate all fields from DB
       setUcName(uc.name || "");
       setUcDesc(uc.description || "");
       setUcTrigger(uc.trigger_text || "");
@@ -89,12 +92,12 @@ export default function Playground() {
       setUcIsWrite(uc.is_write || false);
       setUcSampleConv(uc.sample_conversation || "");
       setUcDirty(false);
-      if (uc.discovered_endpoints) setEndpoints(uc.discovered_endpoints);
-      if (uc.discovered_behavior) setBehavior(uc.discovered_behavior);
-      if (!testInputStr || testInputStr === "{\n  \n}") {
-        setTestInputStr(guessTestInput(uc.user_input));
-      }
+      setTestInputStr(guessTestInput(uc.user_input));
+      ucLoadedRef.current = true;
     }
+    // Always sync discovery/test data from DB (right panel)
+    if (uc.discovered_endpoints) setEndpoints(uc.discovered_endpoints);
+    if (uc.discovered_behavior) setBehavior(uc.discovered_behavior);
   }, [uc]);
 
   const setField = <T,>(setter: React.Dispatch<React.SetStateAction<T>>) => (v: T) => {
