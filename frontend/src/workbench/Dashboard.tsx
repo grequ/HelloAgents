@@ -1,7 +1,9 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import type { AgentCreate } from "../types";
+import type { AgentCreate, ConnectionResult } from "../types";
 import { useDashboard, useCreateAgent, useSeedDemoData } from "./queries";
+import { setAgentApiKey, testAgentConnection, createAgent as apiCreateAgent } from "./api";
+import { btnPrimary, btnSecondary, btnGhost, inp } from "./ui";
 
 const STATUS_COLORS: Record<string, string> = {
   inventoried: "bg-gray-200 text-gray-700",
@@ -11,22 +13,92 @@ const STATUS_COLORS: Record<string, string> = {
   spec_generated: "bg-emerald-100 text-emerald-700",
 };
 
-const EMPTY_FORM: AgentCreate = {
-  name: "", description: "", category: "", owner_team: "", api_type: "rest", api_base_url: "",
+const EMPTY_FORM = {
+  name: "", description: "", category: "", owner_team: "",
+  api_type: "rest", api_base_url: "", api_key: "",
 };
 
 export default function Dashboard() {
-  const { data, isLoading } = useDashboard();
-  const createAgent = useCreateAgent();
+  const { data, isLoading, refetch } = useDashboard();
+  const createAgentMut = useCreateAgent();
   const seedDemo = useSeedDemoData();
   const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState<AgentCreate>({ ...EMPTY_FORM });
+  const [form, setForm] = useState({ ...EMPTY_FORM });
+  const [connResult, setConnResult] = useState<ConnectionResult | null>(null);
+  const [testing, setTesting] = useState(false);
+  const [creating, setCreating] = useState(false);
+
+  const isMcp = form.api_type === "mcp";
+  const isNone = form.api_type === "none";
+  const needsTest = !isMcp && !isNone;
+  const connectionOk = connResult?.ok === true;
+  const canCreate = form.name.trim().length > 0 && (
+    isNone || isMcp || connectionOk
+  );
+
+  const handleTestConnection = async () => {
+    if (!form.api_base_url.trim()) { alert("Enter a Base URL first"); return; }
+    setTesting(true);
+    setConnResult(null);
+    try {
+      // Create agent temporarily to test, then we'll use it
+      const agent = await apiCreateAgent({
+        name: form.name || "Test",
+        description: form.description,
+        category: form.category,
+        owner_team: form.owner_team,
+        api_type: form.api_type,
+        api_base_url: form.api_base_url,
+      });
+      // Set API key if provided
+      if (form.api_key.trim()) {
+        await setAgentApiKey(agent.id, form.api_key);
+      }
+      // Test connection
+      const result = await testAgentConnection(agent.id);
+      setConnResult(result);
+      // Store the created agent ID so Create doesn't duplicate
+      setForm((f) => ({ ...f, _createdId: agent.id } as typeof f));
+    } catch (e: unknown) {
+      setConnResult({ ok: false, error: e instanceof Error ? e.message : "Unknown error" });
+    } finally {
+      setTesting(false);
+    }
+  };
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
-    await createAgent.mutateAsync(form);
-    setForm({ ...EMPTY_FORM });
-    setShowForm(false);
+    setCreating(true);
+    try {
+      // If we already created the agent during test, just set the key and refresh
+      const existingId = (form as Record<string, unknown>)._createdId as string | undefined;
+      if (existingId) {
+        if (form.api_key.trim()) {
+          await setAgentApiKey(existingId, form.api_key);
+        }
+      } else {
+        // Create new agent
+        const agent = await apiCreateAgent({
+          name: form.name,
+          description: form.description,
+          category: form.category,
+          owner_team: form.owner_team,
+          api_type: form.api_type,
+          api_base_url: form.api_base_url,
+        });
+        if (form.api_key.trim()) {
+          await setAgentApiKey(agent.id, form.api_key);
+        }
+      }
+      setForm({ ...EMPTY_FORM });
+      setConnResult(null);
+      setShowForm(false);
+      refetch();
+    } catch (e: unknown) {
+      alert("Create failed: " + (e instanceof Error ? e.message : "Unknown error"));
+    } finally {
+      setCreating(false);
+    }
   };
 
   if (isLoading) return <p className="p-6 text-sm text-gray-500">Loading...</p>;
@@ -43,7 +115,7 @@ export default function Dashboard() {
         {[
           { label: "Agents", value: agentTotal },
           { label: "Use Cases", value: ucTotal },
-          { label: "Agent Specs", value: stats.specs_total },
+          { label: "Specs", value: stats.specs_total },
         ].map((s) => (
           <div key={s.label} className="bg-white rounded-xl shadow-sm border border-gray-100 p-5 text-center">
             <div className="text-3xl font-bold text-text-primary">{s.value}</div>
@@ -55,10 +127,7 @@ export default function Dashboard() {
       {/* Agents section */}
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-lg font-semibold text-text-primary">Agents</h2>
-        <button
-          className="px-4 py-2 rounded-lg bg-tedee-cyan text-tedee-navy font-semibold text-sm hover:bg-hover-cyan transition-colors"
-          onClick={() => setShowForm(!showForm)}
-        >
+        <button className={btnPrimary} onClick={() => setShowForm(!showForm)}>
           + Add Agent
         </button>
       </div>
@@ -66,32 +135,18 @@ export default function Dashboard() {
       {showForm && (
         <form className="bg-white rounded-xl shadow-sm border border-gray-100 p-5 mb-4 space-y-3" onSubmit={handleCreate}>
           <div className="grid grid-cols-2 gap-3">
-            <input
-              className="rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-tedee-cyan"
-              placeholder="Agent name *" required value={form.name}
-              onChange={(e) => setForm({ ...form, name: e.target.value })}
-            />
-            <input
-              className="rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-tedee-cyan"
-              placeholder="Category (e.g. logistics, finance)" value={form.category}
-              onChange={(e) => setForm({ ...form, category: e.target.value })}
-            />
+            <input className={inp} placeholder="Agent name *" required value={form.name}
+              onChange={(e) => setForm({ ...form, name: e.target.value })} />
+            <input className={inp} placeholder="Category (e.g. logistics, finance)" value={form.category}
+              onChange={(e) => setForm({ ...form, category: e.target.value })} />
           </div>
-          <input
-            className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-tedee-cyan"
-            placeholder="Description" value={form.description}
-            onChange={(e) => setForm({ ...form, description: e.target.value })}
-          />
+          <input className={inp} placeholder="Description" value={form.description}
+            onChange={(e) => setForm({ ...form, description: e.target.value })} />
           <div className="grid grid-cols-2 gap-3">
-            <input
-              className="rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-tedee-cyan"
-              placeholder="Owner team" value={form.owner_team}
-              onChange={(e) => setForm({ ...form, owner_team: e.target.value })}
-            />
-            <select
-              className="rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-tedee-cyan"
-              value={form.api_type} onChange={(e) => setForm({ ...form, api_type: e.target.value })}
-            >
+            <input className={inp} placeholder="Owner team" value={form.owner_team}
+              onChange={(e) => setForm({ ...form, owner_team: e.target.value })} />
+            <select className={inp} value={form.api_type}
+              onChange={(e) => { setForm({ ...form, api_type: e.target.value }); setConnResult(null); }}>
               <option value="rest">REST API</option>
               <option value="graphql">GraphQL</option>
               <option value="mcp">MCP Server</option>
@@ -101,18 +156,51 @@ export default function Dashboard() {
               <option value="none">No API</option>
             </select>
           </div>
-          <input
-            className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-tedee-cyan"
-            placeholder="API Base URL (e.g. https://api.example.com/v1)" value={form.api_base_url}
-            onChange={(e) => setForm({ ...form, api_base_url: e.target.value })}
-          />
+
+          {!isNone && (
+            <>
+              <input className={inp}
+                placeholder={isMcp ? "Server URI (e.g. stdio://./server or http://localhost:3001/sse)" : "API Base URL (e.g. https://api.example.com/v1)"}
+                value={form.api_base_url}
+                onChange={(e) => { setForm({ ...form, api_base_url: e.target.value }); setConnResult(null); }} />
+              <input className={inp} type="password"
+                placeholder={isMcp ? "Auth token (optional)" : "API Key (optional)"}
+                value={form.api_key}
+                onChange={(e) => setForm({ ...form, api_key: e.target.value })} />
+            </>
+          )}
+
+          {/* Test Connection */}
+          {needsTest && (
+            <div className="flex items-center gap-3">
+              <button type="button" className={btnGhost}
+                onClick={handleTestConnection}
+                disabled={testing || !form.api_base_url.trim() || !form.name.trim()}>
+                {testing ? "Testing..." : "Test Connection"}
+              </button>
+              {connResult && (
+                <span className={`text-xs font-medium ${connResult.ok ? "text-green-600" : "text-red-600"}`}>
+                  {connResult.ok ? `Connected (${connResult.status_code})` : `Failed: ${connResult.error}`}
+                </span>
+              )}
+              {!connResult && !testing && form.api_base_url.trim() && (
+                <span className="text-xs text-amber-600">Test connection before creating</span>
+              )}
+            </div>
+          )}
+
           <div className="flex gap-2">
-            <button type="submit" className="px-4 py-2 rounded-lg bg-tedee-cyan text-tedee-navy font-semibold text-sm hover:bg-hover-cyan" disabled={createAgent.isPending}>
-              {createAgent.isPending ? "Creating..." : "Create"}
+            <button type="submit" className={btnPrimary}
+              disabled={creating || !canCreate}>
+              {creating ? "Creating..." : "Create"}
             </button>
-            <button type="button" className="px-4 py-2 rounded-lg border border-gray-200 text-gray-600 text-sm hover:bg-gray-100" onClick={() => setShowForm(false)}>
+            <button type="button" className={btnSecondary}
+              onClick={() => { setShowForm(false); setForm({ ...EMPTY_FORM }); setConnResult(null); }}>
               Cancel
             </button>
+            {needsTest && !connectionOk && form.api_base_url.trim() && (
+              <span className="text-xs text-gray-400 self-center">Test connection to enable Create</span>
+            )}
           </div>
         </form>
       )}
@@ -144,11 +232,7 @@ export default function Dashboard() {
       {agents.length === 0 && (
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-8 text-center">
           <p className="text-sm text-gray-500 mb-3">No agents yet. Start by seeding demo data or add agents manually.</p>
-          <button
-            className="px-4 py-2 rounded-lg bg-tedee-cyan text-tedee-navy font-semibold text-sm hover:bg-hover-cyan disabled:opacity-50"
-            onClick={() => seedDemo.mutate()}
-            disabled={seedDemo.isPending}
-          >
+          <button className={btnPrimary} onClick={() => seedDemo.mutate()} disabled={seedDemo.isPending}>
             {seedDemo.isPending ? "Loading..." : "Load Demo Data (DummyJSON APIs)"}
           </button>
           <p className="text-xs text-gray-400 mt-2">
