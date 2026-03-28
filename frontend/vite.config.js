@@ -4,9 +4,18 @@ import react from "@vitejs/plugin-react";
 export default defineConfig({
   plugins: [react()],
   server: {
+    port: 3000,
     proxy: {
       "/chat": "http://localhost:8000",
       "/orders": "http://localhost:8000",
+      "/workbench/systems": "http://localhost:8000",
+      "/workbench/usecases": "http://localhost:8000",
+      "/workbench/discover": "http://localhost:8000",
+      "/workbench/test": "http://localhost:8000",
+      "/workbench/generate-spec": "http://localhost:8000",
+      "/workbench/specs": "http://localhost:8000",
+      "/workbench/dashboard": "http://localhost:8000",
+      "/workbench/seed": "http://localhost:8000",
     },
   },
 });

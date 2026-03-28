@@ -13,6 +13,7 @@ from pydantic import BaseModel
 
 import db
 from agents import support
+from workbench.routes import router as workbench_router
 
 
 @asynccontextmanager
@@ -29,6 +30,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+app.include_router(workbench_router)
 
 
 class ChatRequest(BaseModel):

@@ -46,6 +46,24 @@ body {
   color: #666;
 }
 
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+
+.nav-link {
+  padding: 6px 14px;
+  border-radius: 6px;
+  background: #1a1a2e;
+  color: white;
+  text-decoration: none;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.nav-link:hover { background: #333; }
+
 .header-legend {
   display: flex;
   gap: 16px;
