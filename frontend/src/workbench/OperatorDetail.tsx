@@ -89,7 +89,7 @@ export default function OperatorDetail() {
   useEffect(() => {
     if (!agent || specSourceLoaded.current) return;
     if (agent.api_spec_source) {
-      setSpecInput(agent.api_spec_source === "json" ? "" : agent.api_spec_source);
+      setSpecInput(agent.api_spec_source);
       specSourceLoaded.current = true;
     }
   }, [agent]);
@@ -162,7 +162,7 @@ export default function OperatorDetail() {
     // Raw JSON
     try {
       const spec = JSON.parse(input);
-      await uploadSpec.mutateAsync({ id: id!, spec, source: input.length > 500 ? "json" : input });
+      await uploadSpec.mutateAsync({ id: id!, spec, source: input });
     } catch {
       alert("Invalid JSON.\n\nPaste either:\n• A Swagger/OpenAPI JSON spec\n• A URL to a swagger.json file (e.g. https://petstore.swagger.io/v2/swagger.json)");
     }
