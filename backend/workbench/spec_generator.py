@@ -23,24 +23,47 @@ async def generate(agent_name: str, agents: list[dict], use_cases: list[dict],
     agents_ctx = []
     api_specs_ctx = []
     for s in agents:
+        is_mcp = s.get("api_type") == "mcp"
         spec_summary = ""
-        endpoints_detail = ""
-        if s.get("api_spec") and isinstance(s["api_spec"], dict):
-            paths = s["api_spec"].get("paths", {})
-            spec_summary = f" ({len(paths)} endpoints)"
-            # Include actual endpoint details
-            for path, methods in paths.items():
-                for method, details in methods.items():
-                    if method in ("get", "post", "put", "patch", "delete"):
-                        endpoints_detail += f"\n  - {method.upper()} {path}: {details.get('summary', details.get('operationId', ''))}"
-        agents_ctx.append(
-            f"### {s['name']}\n"
-            f"- Description: {s.get('description', '')}\n"
-            f"- Type: {s.get('api_type', 'rest')}{spec_summary}\n"
-            f"- Base URL: {s.get('api_base_url', 'N/A')}\n"
-            f"- Auth: {s.get('api_auth_type', 'none')}\n"
-            f"- Endpoints:{endpoints_detail or ' N/A'}"
-        )
+        capabilities_detail = ""
+        if s.get("api_spec"):
+            if is_mcp and isinstance(s["api_spec"], list):
+                # MCP tool definitions
+                tools = s["api_spec"]
+                spec_summary = f" ({len(tools)} MCP tools)"
+                for tool in tools:
+                    tname = tool.get("name", "unnamed")
+                    tdesc = tool.get("description", "")
+                    params = tool.get("inputSchema", {}).get("properties", {})
+                    param_names = ", ".join(params.keys()) if params else "none"
+                    capabilities_detail += f"\n  - {tname}({param_names}): {tdesc}"
+            elif isinstance(s["api_spec"], dict):
+                paths = s["api_spec"].get("paths", {})
+                spec_summary = f" ({len(paths)} endpoints)"
+                for path, methods in paths.items():
+                    for method, details in methods.items():
+                        if method in ("get", "post", "put", "patch", "delete"):
+                            capabilities_detail += f"\n  - {method.upper()} {path}: {details.get('summary', details.get('operationId', ''))}"
+
+        if is_mcp:
+            agents_ctx.append(
+                f"### {s['name']}\n"
+                f"- Description: {s.get('description', '')}\n"
+                f"- Type: MCP Server{spec_summary}\n"
+                f"- Server URI: {s.get('api_base_url', 'N/A')}\n"
+                f"- Auth: {s.get('api_auth_type', 'none')}\n"
+                f"- MCP Tools:{capabilities_detail or ' N/A'}\n"
+                f"- Protocol: Model Context Protocol (MCP) — connect via MCP client, NOT HTTP REST calls"
+            )
+        else:
+            agents_ctx.append(
+                f"### {s['name']}\n"
+                f"- Description: {s.get('description', '')}\n"
+                f"- Type: {s.get('api_type', 'rest')}{spec_summary}\n"
+                f"- Base URL: {s.get('api_base_url', 'N/A')}\n"
+                f"- Auth: {s.get('api_auth_type', 'none')}\n"
+                f"- Endpoints:{capabilities_detail or ' N/A'}"
+            )
 
     # Build use case context
     use_cases_ctx = []
@@ -98,6 +121,21 @@ async def generate(agent_name: str, agents: list[dict], use_cases: list[dict],
         if parts:
             config_section = "## Configuration & Requirements\n" + "\n".join(parts)
 
+    # Detect MCP agents for protocol-specific instructions
+    has_mcp = any(s.get("api_type") == "mcp" for s in agents)
+    has_rest = any(s.get("api_type") != "mcp" for s in agents)
+    protocol_note = ""
+    if has_mcp:
+        protocol_note = """
+## MCP Protocol Note
+One or more connected agents use Model Context Protocol (MCP). For MCP agents:
+- Connect via MCP client (e.g. `mcp` Python SDK or `@modelcontextprotocol/sdk`), NOT via HTTP REST calls.
+- The agent's tools are provided by the MCP server — call them using `session.call_tool(name, arguments)`.
+- Include MCP client setup in the implementation: create a client session, connect to the server URI, list available tools.
+- The skeleton code should show the MCP connection pattern alongside any REST calls.
+- If the agent connects to BOTH MCP servers and REST APIs, implement both protocols.
+"""
+
     prompt = f"""You are a senior AI architect. Generate a COMPLETE, SELF-CONTAINED agent implementation
 specification in Markdown. This document will be given to Claude Code (an AI coding assistant) to
 implement the agent from scratch. It must contain EVERYTHING needed — no external references.
@@ -105,7 +143,7 @@ implement the agent from scratch. It must contain EVERYTHING needed — no exter
 ## Agent Name: {agent_name}
 
 {config_section}
-
+{protocol_note}
 ## Connected Agents
 {chr(10).join(agents_ctx)}
 
@@ -225,10 +263,18 @@ Return ONLY valid JSON."""
         "Include role, boundaries, available tools, usage guidelines, safety guardrails. Return raw text."
     )
 
+    mcp_hint = ""
+    if has_mcp:
+        mcp_hint = (
+            "For MCP-connected agents, use the `mcp` Python SDK (pip install mcp) to connect. "
+            "Show MCP client session setup with `ClientSession`, `StdioServerParameters` or SSE transport. "
+            "Call tools via `session.call_tool(name, arguments)`. "
+        )
     skeleton_code = await _call_claude(
         base_context +
         "Generate ONLY the Python implementation code for this agent. "
-        "Include all imports, tool handlers with real HTTP endpoints, orchestration loop, error handling. "
+        "Include all imports, tool handlers, orchestration loop, error handling. "
+        + mcp_hint +
         "Return raw Python code, no markdown fences."
     )
 
