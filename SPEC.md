@@ -12,11 +12,17 @@ multi-agent AI systems:
    frontend visualizes the full orchestration trace in real time.
 
 2. **Agent Migration Workbench** — An interactive module that guides an
-   organization through migrating to an agent-based architecture. It provides a
-   structured workflow: inventory your agents, document their APIs, define use
-   cases, test how an AI agent would interact with each one, and generate
-   production-ready agent specifications. The output is a complete migration
-   roadmap with tested, validated agent specs.
+   organization through migrating to an agent-based architecture. The workbench
+   distinguishes two types of agents:
+   - **Agent Operators** wrap legacy systems (SAP, Stripe, CRM, etc.) and expose
+     their operations as MCP tools. An operator is a thin translation layer:
+     legacy API in, MCP tool interface out.
+   - **Agent Orchestrators** are high-level agents that connect to one or more
+     operators via MCP, coordinate their tools, and serve end-user use cases.
+
+   The workflow: inventory your operators and orchestrators, document operator
+   APIs, define use cases, test agent behavior, and generate production-ready
+   code — MCP servers for operators, Claude agents for orchestrators.
 
 ---
 
@@ -111,17 +117,18 @@ CREATE TABLE orders (
 ```sql
 CREATE TABLE wb_agents (
     id              CHAR(36) PRIMARY KEY,
+    agent_role      VARCHAR(20) NOT NULL DEFAULT 'operator',  -- 'operator' | 'orchestrator'
     name            VARCHAR(200) NOT NULL,
     description     TEXT,
     category        VARCHAR(50),
     owner_team      VARCHAR(200),
-    api_type        VARCHAR(20) DEFAULT 'rest',
-    api_base_url    VARCHAR(500),
-    api_docs_url    VARCHAR(500),
-    api_spec        JSON,
-    api_key_enc     VARCHAR(500),       -- encrypted
-    api_auth_type   VARCHAR(30) DEFAULT 'bearer',
-    api_auth_config JSON,
+    api_type        VARCHAR(20) DEFAULT 'rest',       -- operator only
+    api_base_url    VARCHAR(500),                      -- operator only
+    api_docs_url    VARCHAR(500),                      -- operator only
+    api_spec        JSON,                              -- operator only
+    api_key_enc     VARCHAR(500),                      -- operator only, encrypted
+    api_auth_type   VARCHAR(30) DEFAULT 'bearer',      -- operator only
+    api_auth_config JSON,                              -- operator only
     status          VARCHAR(30) DEFAULT 'inventoried',
     created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
@@ -388,27 +395,50 @@ React single-page app (Vite) with two panels:
 
 ### Objective
 
-An interactive module that guides an organization through the process of migrating
-to an agent-based architecture. It provides a structured workflow: inventory your
-agents, document their APIs, define use cases, test how an AI agent would interact
-with each one, and generate production-ready agent specifications.
+An interactive module that guides an organization through migrating to an
+agent-based architecture built on **MCP (Model Context Protocol)**.
 
-The output is a **complete migration roadmap** with tested, validated agent specs
-that can be handed to an engineering team (or another AI agent) for implementation.
+The workbench models two distinct agent roles:
+
+- **Agent Operators** — wrap a single legacy system and expose its operations as
+  MCP tools. Think of an operator as a bridge: it accepts MCP tool calls and
+  translates them into REST/GraphQL/SOAP calls to the underlying system.
+- **Agent Orchestrators** — high-level Claude agents that connect to one or more
+  operators via MCP client sessions. An orchestrator has a persona, behavior
+  instructions, and use cases; it coordinates operator tools to serve end users.
+
+The output is **production-ready code**: MCP server implementations for operators
+and Claude agent implementations for orchestrators, ready to be handed to an
+engineering team (or another AI agent) for deployment.
 
 ### Core Workflow
 
 ```
 ┌──────────────┐    ┌──────────────┐    ┌──────────────┐    ┌──────────────┐    ┌──────────────┐
-│  1. AGENTS   │───►│  2. APIs     │───►│  3. USE      │───►│  4. AGENT    │───►│  5. SPEC     │
+│  1. AGENT    │───►│  2. APIs     │───►│  3. USE      │───►│  4. AGENT    │───►│  5. CODE     │
 │  INVENTORY   │    │  & ACCESS    │    │  CASES       │    │  PLAYGROUND  │    │  GENERATION  │
 │              │    │              │    │              │    │              │    │              │
-│ List all     │    │ Document     │    │ Define what  │    │ Test agent   │    │ Generate     │
-│ agents your  │    │ how each     │    │ humans do    │    │ behavior     │    │ production   │
-│ org uses     │    │ agent is     │    │ with each    │    │ against real │    │ agent specs  │
-│              │    │ accessed     │    │ agent today  │    │ APIs         │    │              │
+│ Operators:   │    │ (Operators)  │    │ (Operators)  │    │ (Operators)  │    │ Operators →  │
+│ legacy       │    │ Document how │    │ Define what  │    │ Test agent   │    │ MCP server   │
+│ systems      │    │ each system  │    │ humans do    │    │ behavior     │    │              │
+│              │    │ is accessed  │    │ with each    │    │ against real │    │ Orchestrators│
+│ Orchestrators│    │              │    │ system today │    │ APIs         │    │ → Claude     │
+│ coordination │    │ (Orchestrs)  │    │              │    │              │    │   agent      │
+│ agents       │    │ Connect      │    │ (Orchestrs)  │    │              │    │              │
+│              │    │ operators,   │    │ Define end-  │    │              │    │              │
+│              │    │ define       │    │ user use     │    │              │    │              │
+│              │    │ behavior     │    │ cases        │    │              │    │              │
 └──────────────┘    └──────────────┘    └──────────────┘    └──────────────┘    └──────────────┘
 ```
+
+**Operators** progress through steps 1 → 2 → 3 → 4 → 5: inventory the legacy
+system, document its API, define use cases, test discovery against the API, and
+generate an MCP server implementation.
+
+**Orchestrators** progress through steps 1 → 2 → 3 → 5: inventory the
+orchestrator, connect it to operators and define behavior, define end-user use
+cases, and generate a Claude agent implementation. (Step 4 / Playground applies
+to operators only.)
 
 ### Workbench Data Model
 
@@ -417,11 +447,13 @@ that can be handed to an engineering team (or another AI agent) for implementati
 ```
 {
     id:             UUID
+    agent_role:     string          "operator" | "orchestrator"
     name:           string          "SAP WMS"
     description:    string          "Warehouse management — pick, pack, ship, inventory"
     category:       string          "logistics" | "finance" | "crm" | "hr" | ...
     owner_team:     string          "Logistics & Fulfillment"
 
+    // --- Operator-only fields (null for orchestrators) ---
     api_type:       string          "rest" | "graphql" | "soap" | "grpc" | "database" | "none"
     api_base_url:   string?         "https://api.sapwms.example.com/v1"
     api_docs_url:   string?         "https://docs.sapwms.example.com"
@@ -436,6 +468,17 @@ that can be handed to an engineering team (or another AI agent) for implementati
     updated_at:     datetime
 }
 ```
+
+**`agent_role` meanings:**
+
+- **`"operator"`** — Wraps a single legacy system. Has API connection fields
+  (type, URL, key, spec). Generation output is an **MCP server** with
+  `@server.tool()` handlers that translate MCP calls into `httpx` requests to
+  the legacy API.
+- **`"orchestrator"`** — Connects to one or more operators via MCP. Has no API
+  fields of its own. Instead it has connected operators, a persona/behavior
+  definition, and use cases. Generation output is a **Claude agent** with MCP
+  client sessions that connect to operator servers and use the `tool_use` loop.
 
 #### Use Case
 
@@ -490,112 +533,159 @@ that can be handed to an engineering team (or another AI agent) for implementati
 
 ### Module Pages
 
-#### Page 1: Dashboard / Migration Map
+#### Page 1: Dashboard
 
 **Route:** `/workbench`
 
-The landing page showing the overall migration status.
+The landing page showing all operators and orchestrators.
 
-**Layout:**
+**Layout — two sections:**
+
 ```
 ┌────────────────────────────────────────────────────────────────┐
 │  Agent Migration Workbench                                      │
 ├────────────────────────────────────────────────────────────────┤
 │                                                                 │
-│  Stats:  Agents: 12    Use Cases: 30    Agent Specs: 3          │
+│  Stats:  Operators: 8   Orchestrators: 2   Use Cases: 30       │
 │                                                                 │
-│  [+ Add Agent]                                                 │
+│  [+ Add Agent]  ← opens form with role toggle                  │
 │                                                                 │
+│  OPERATORS                                                      │
 │  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐       │
 │  │ SAP WMS  │  │ Carrier  │  │ Stripe   │  │ CRM      │       │
 │  │ logistics│  │ logistics│  │ finance  │  │ crm      │       │
 │  │ tested   │  │ documented│ │ inventoried│ │ inventoried│     │
 │  └──────────┘  └──────────┘  └──────────┘  └──────────┘       │
 │                                                                 │
+│  ORCHESTRATORS                                                  │
+│  ┌──────────────────┐  ┌──────────────────┐                    │
+│  │ Support Agent     │  │ Logistics Agent   │                   │
+│  │ 3 operators       │  │ 2 operators       │                   │
+│  │ 5 use cases       │  │ 3 use cases       │                   │
+│  └──────────────────┘  └──────────────────┘                    │
+│                                                                 │
 └────────────────────────────────────────────────────────────────┘
 ```
 
-#### Page 2: Agent Detail
+**Creation form** (modal or inline, triggered by "+ Add Agent"):
+- **Role toggle:** Operator / Orchestrator (default: Operator)
+- **Operator fields:** name, description, category, api_type, api_base_url,
+  api_key, test connection button
+- **Orchestrator fields:** name, description only
 
-**Route:** `/workbench/agents/:id`
+#### Page 2a: Operator Detail
 
-All information about a single agent + its use cases.
+**Route:** `/workbench/agents/:id` (where `agent_role = "operator"`)
 
-**Layout — 3 sections:**
+All information about a single operator: its API connection, use cases, and
+generation config.
 
 **Header:**
 ```
 ┌────────────────────────────────────────────────────────────────┐
 │  ← Back                                                         │
-│  SAP WMS                    [Save] [Generate Agent Spec] [Delete]│
+│  SAP WMS  (operator)        [Save] [Generate MCP Server] [Delete]│
 │  Warehouse management — pick, pack, ship, inventory              │
 └──────────────────────────────────────────────────────────────────┘
 ```
 
-Top actions: Save persists all config fields, Generate runs spec generation,
-Delete removes the agent. All always visible.
-
-##### Section A: API & Technology
+##### Section A: API Connection
 ```
 ┌────────────────────────────────────────────────────────────────┐
-│  API & Technology                                                │
+│  API Connection                                                  │
 │                                                                   │
-│  API Configuration (read-only display + set key/spec/test)       │
+│  API Type: [REST ▼]  Auth: [Bearer ▼]                            │
+│  Base URL: [https://api.sapwms.example.com/v1            ]       │
+│  API Key:  [●●●●●●  Set Key]                                    │
+│  API Spec: [Upload OpenAPI]  Status: ✓ Loaded (42 endpoints)    │
+│                                                                   │
+│  [Test Connection]  → 200 OK (142ms)                             │
+└──────────────────────────────────────────────────────────────────┘
+```
+
+##### Section B: Use Cases
+```
+┌────────────────────────────────────────────────────────────────┐
+│  Use Cases (8)                                   [+ Add Use Case]│
+│  (card list with priority/status/actions — click to open         │
+│   Playground at /workbench/agents/:id/usecases/:ucId)            │
+└──────────────────────────────────────────────────────────────────┘
+```
+
+##### Section C: Generation Config (collapsible)
+```
+┌────────────────────────────────────────────────────────────────┐
+│  ▶ Generation Config                                             │
+│                                                                   │
 │  Technology Stack: [Python 3.11 ▼]   Framework: [FastAPI + ...]  │
 │  Deployment: [Docker ...]  Error Handling: [Retry once on 5xx...]│
 │  Auth Notes: [bearer — API key from env var]                     │
 └──────────────────────────────────────────────────────────────────┘
 ```
 
+**Generate** produces an MCP server spec: Python code using the `mcp` SDK with
+`@server.tool()` handlers, each handler making `httpx` calls to the legacy API.
+
+#### Page 2b: Orchestrator Detail
+
+**Route:** `/workbench/agents/:id` (where `agent_role = "orchestrator"`)
+
+Configuration for an orchestrator: which operators it connects to, its behavior,
+and its end-user use cases.
+
+**Header:**
+```
+┌────────────────────────────────────────────────────────────────┐
+│  ← Back                                                         │
+│  Support Agent  (orchestrator)  [Save] [Generate Agent] [Delete] │
+│  Top-level customer support orchestrator                         │
+└──────────────────────────────────────────────────────────────────┘
+```
+
+##### Section A: Connected Operators
+```
+┌────────────────────────────────────────────────────────────────┐
+│  Connected Operators                                             │
+│                                                                   │
+│  [+ Connect Operator ▼]  (dropdown of all operators)             │
+│                                                                   │
+│  ┌─ SAP WMS ──────────────────────────────────────────────┐     │
+│  │  Tools: track_package, check_inventory, get_handover    │     │
+│  │                                             [Disconnect]│     │
+│  └────────────────────────────────────────────────────────┘     │
+│  ┌─ Stripe ───────────────────────────────────────────────┐     │
+│  │  Tools: initiate_refund, check_invoice                  │     │
+│  │                                             [Disconnect]│     │
+│  └────────────────────────────────────────────────────────┘     │
+└──────────────────────────────────────────────────────────────────┘
+```
+
+Each connected operator card shows the tools (use case names) that the
+orchestrator can invoke. Tools are derived from the operator's use cases.
+
 ##### Section B: Behavior
 ```
 ┌────────────────────────────────────────────────────────────────┐
 │  Behavior                                                        │
 │                                                                   │
-│  Agent Name: [SAP WMS Agent                                 ]    │
+│  Agent Name: [Support Agent                                 ]    │
 │  Agent Role & Persona: (auto-sized textarea, shows full text)    │
 │  Additional Context: (auto-sized textarea, shows full text)      │
 └──────────────────────────────────────────────────────────────────┘
 ```
 
-Textareas auto-expand to show their full content (no scrolling).
-
-##### Section C: Interactions
-
-Split into two clear sub-sections — "asks" and "provides to":
-
+##### Section C: Use Cases
 ```
 ┌────────────────────────────────────────────────────────────────┐
-│  Interactions                                                    │
-│                                                                   │
-│  This Agent Asks                                                 │
-│  ┌────────────────────────────────────────────────────────┐     │
-│  │ [SAP WMS Agent] asks [Payment Agent ▼] for:            │     │
-│  │ [x] initiate_refund  [ ] check_invoice                 │     │
-│  │                                            [Remove]    │     │
-│  └────────────────────────────────────────────────────────┘     │
-│  [+ Add]                                                         │
-│                                                                   │
-│  This Agent Provides Information To                              │
-│  ┌────────────────────────────────────────────────────────┐     │
-│  │ [SAP WMS Agent] provides to [Support Orch. ▼] for:    │     │
-│  │ [x] ask_logistics  [x] track_package                   │     │
-│  │                                            [Remove]    │     │
-│  └────────────────────────────────────────────────────────┘     │
-│  [+ Add]                                                         │
+│  Use Cases (5)                                   [+ Add Use Case]│
+│  (end-user scenarios — e.g. "Customer asks for refund status")   │
+│  (card list with priority/status)                                │
 └──────────────────────────────────────────────────────────────────┘
 ```
 
-Agent dropdowns exclude the current agent and agents already selected
-in the same sub-section.
-
-##### Section D: Use Cases
-```
-┌────────────────────────────────────────────────────────────────┐
-│  Use Cases (8)                                   [+ Add Use Case]│
-│  (same as before — card list with priority/status/actions)       │
-└──────────────────────────────────────────────────────────────────┘
-```
+**Generate** produces a Claude agent spec: Python code with MCP client sessions
+connecting to each operator's MCP server, using the `tool_use` loop to
+coordinate across operators.
 
 #### Page 3: Use Case Detail + Agent Playground
 
@@ -703,58 +793,63 @@ Review generated agent spec, edit, set cross-agent dependencies, export.
 
 **Route:** `/workbench/map`
 
-A visual, read-only map showing all generated agents, the tools (skills) each
-agent exposes, the APIs they connect to, and how agents call each other.
-The goal is a high-level "at a glance" view so a human can understand the full
-agent architecture without reading individual specs.
+A visual, read-only map showing all operators and orchestrators, their tools /
+connected operators, and how they relate. The goal is a high-level "at a glance"
+view so a human can understand the full agent architecture.
 
 ```
 ┌────────────────────────────────────────────────────────────────┐
 │  Agent Architecture Map                                         │
 │                                                                  │
-│  ┌──────────────────┐        ┌──────────────────┐              │
-│  │ Logistics Agent   │───────►│ Support Orch.    │              │
-│  │                   │        │                   │              │
-│  │ Tools:            │        │ Tools:            │              │
-│  │ • track_package   │        │ • ask_logistics   │              │
-│  │ • check_inventory │        │ • ask_payment     │              │
-│  │                   │        │                   │              │
-│  │ Systems:          │        └──────────┬───────┘              │
-│  │ • SAP WMS         │                   │                      │
-│  │ • Carrier API     │        ┌──────────▼───────┐              │
-│  └──────────────────┘        │ Payment Agent     │              │
-│                               │                   │              │
-│                               │ Tools:            │              │
-│                               │ • initiate_refund │              │
-│                               │                   │              │
-│                               │ Systems:          │              │
-│                               │ • Stripe          │              │
-│                               └──────────────────┘              │
+│  ┌─ ORCHESTRATOR (purple top bar) ─┐                            │
+│  │  Support Agent                   │                            │
+│  │                                  │                            │
+│  │  Connected Operators:            │                            │
+│  │  • SAP WMS Operator              │                            │
+│  │  • Carrier Operator              │                            │
+│  │  • Stripe Operator               │                            │
+│  └──────┬──────────┬──────────┬────┘                            │
+│         │          │          │                                   │
+│         ▼          ▼          ▼                                   │
+│  ┌─ OPERATOR ─┐ ┌─ OPERATOR ─┐ ┌─ OPERATOR ─┐                  │
+│  │ (cyan bar) │ │ (cyan bar) │ │ (cyan bar) │                   │
+│  │ SAP WMS    │ │ Carrier    │ │ Stripe     │                   │
+│  │            │ │            │ │            │                    │
+│  │ Tools:     │ │ Tools:     │ │ Tools:     │                   │
+│  │ • track_   │ │ • track_   │ │ • initiate_│                   │
+│  │   package  │ │   shipment │ │   refund   │                   │
+│  │ • check_   │ │            │ │ • check_   │                   │
+│  │   inventory│ │            │ │   invoice  │                   │
+│  └────────────┘ └────────────┘ └────────────┘                   │
 │                                                                  │
-│  Click any agent card to open its spec detail page.             │
+│  Click any card to open its detail page.                        │
 └────────────────────────────────────────────────────────────────┘
 ```
 
-**Data sources:**
-- Agent list + tools from `GET /workbench/specs`
-- Agent names from `GET /workbench/agents`
-- Connections from `depends_on` / `called_by` fields on each agent spec
+**Visual differentiation:**
+- **Operators:** cyan (`#34CFFD`) top bar, show TOOLS (from use cases)
+- **Orchestrators:** purple top bar, show CONNECTED OPERATORS
+- **Arrows:** orchestrator → operator (call direction)
 
-**Layout:** SVG canvas with agent cards as nodes, arrows showing call direction,
-tool names listed inside each card, linked system names below tools.
+**Data sources:**
+- Agent list + roles from `GET /workbench/agents`
+- Operator tools from use cases
+- Orchestrator connections from connected_operators field
+
+**Layout:** SVG canvas with agent cards as nodes, arrows showing call direction.
 
 ---
 
 ### Frontend Routes
 
 ```
-/                                       Customer support demo (chat + trace)
-/workbench                              Dashboard + agent list
-/workbench/agents/:id                   Agent detail + use cases
-/workbench/agents/:id/usecases/:ucId    Use case detail + playground
-/workbench/specs                        List generated agent specs
-/workbench/specs/:id                    Agent spec review + export
-/workbench/map                          Visual agent architecture map
+/workbench                              Dashboard (operators + orchestrators)
+/workbench/agents/:id                   Operator or Orchestrator detail (based on role)
+/workbench/agents/:id/usecases/:ucId    Playground
+/workbench/specs                        Generated specs list
+/workbench/specs/:id                    Spec detail/editor
+/workbench/map                          Agent architecture map
+/workbench/demo                         Customer support demo
 ```
 
 ### Self-Discovery Engine
@@ -861,15 +956,27 @@ the stored API key).
 
 ```json
 {
-    "agent_ids": ["uuid1", "uuid2"],
-    "agent_name": "Logistics Agent",
+    "agent_id": "uuid",
     "include_use_cases": ["uuid1", "uuid2", "uuid3"]
 }
 ```
 
-Returns the same 4-file output as the existing generator (spec_md, tools_json,
-system_prompt, agent_py) but enriched with tested endpoint data and cross-agent
-dependency information. (Note: `system_prompt` refers to the standard AI term.)
+Generation produces different output depending on the agent's role:
+
+**Operator → MCP Server Implementation:**
+- Python code using the `mcp` SDK (`from mcp.server import Server`)
+- Each use case becomes a `@server.tool()` handler
+- Handlers make `httpx` calls to the legacy API (base URL, auth from agent config)
+- Includes error handling, input validation, response formatting
+
+**Orchestrator → Claude Agent Implementation:**
+- Python code with MCP client sessions (one per connected operator)
+- Uses the Anthropic SDK `tool_use` loop to coordinate across operator tools
+- System prompt generated from persona/behavior fields
+- Includes the orchestrator's use cases as example interactions
+
+Both output types include: `spec_markdown`, `tools_json`, `system_prompt`,
+`skeleton_code`. (Note: `system_prompt` refers to the standard AI term.)
 
 ### Backend API Summary
 
@@ -972,7 +1079,8 @@ HelloAgents/
 │           ├── api.ts           # Typed API client
 │           ├── queries.ts       # TanStack Query hooks
 │           ├── Dashboard.tsx    # Agent list + stats
-│           ├── AgentDetail.tsx  # Agent info + use case list
+│           ├── OperatorDetail.tsx   # Operator: API connection + use cases + gen config
+│           ├── OrchestratorDetail.tsx # Orchestrator: connected operators + behavior + use cases
 │           ├── Playground.tsx   # Use case detail + discovery + live test
 │           ├── AgentSpecList.tsx # List of generated specs
 │           ├── AgentSpecView.tsx # Spec review + export
@@ -1014,12 +1122,20 @@ This is validated before storing.
 - Rate limiting: max 1 test per second per agent to avoid overloading APIs
 - Sensitive data (API keys, auth tokens) is redacted from stored test results
 
-#### Spec Generation Enhancement
-The workbench generator improves on the standalone `generator/` by:
-- Using **tested endpoint data** (not just OpenAPI spec) — it knows which endpoints actually work
-- Including **real response examples** from test runs
-- Mapping **cross-agent dependencies** from the agent map
-- Generating **error handling** based on observed error responses during testing
+#### Spec Generation
+The workbench generator produces two types of output:
+
+**For operators (MCP server):**
+- Uses **tested endpoint data** (not just OpenAPI spec) — it knows which endpoints actually work
+- Includes **real response examples** from test runs
+- Generates `@server.tool()` handlers with `httpx` calls to the legacy API
+- Generates **error handling** based on observed error responses during testing
+
+**For orchestrators (Claude agent):**
+- Generates MCP client sessions connecting to each operator's MCP server
+- Builds system prompt from persona, behavior, and additional context fields
+- Includes use cases as example interaction patterns
+- Uses the `tool_use` loop to coordinate across connected operator tools
 
 ### Database Tables
 
@@ -1043,17 +1159,18 @@ CREATE TABLE orders (
 -- Agent Migration Workbench
 CREATE TABLE wb_agents (
     id              CHAR(36) PRIMARY KEY,
+    agent_role      VARCHAR(20) NOT NULL DEFAULT 'operator',  -- 'operator' | 'orchestrator'
     name            VARCHAR(200) NOT NULL,
     description     TEXT,
     category        VARCHAR(50),
     owner_team      VARCHAR(200),
-    api_type        VARCHAR(20) DEFAULT 'rest',
-    api_base_url    VARCHAR(500),
-    api_docs_url    VARCHAR(500),
-    api_spec        JSON,
-    api_key_enc     VARCHAR(500),       -- encrypted
-    api_auth_type   VARCHAR(30) DEFAULT 'bearer',
-    api_auth_config JSON,
+    api_type        VARCHAR(20) DEFAULT 'rest',       -- operator only
+    api_base_url    VARCHAR(500),                      -- operator only
+    api_docs_url    VARCHAR(500),                      -- operator only
+    api_spec        JSON,                              -- operator only
+    api_key_enc     VARCHAR(500),                      -- operator only, encrypted
+    api_auth_type   VARCHAR(30) DEFAULT 'bearer',      -- operator only
+    api_auth_config JSON,                              -- operator only
     status          VARCHAR(30) DEFAULT 'inventoried',
     created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
