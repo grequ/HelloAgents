@@ -118,6 +118,19 @@ async def ensure_schema():
             if row[0] > 0:
                 await cur.execute("ALTER TABLE wb_use_cases DROP COLUMN priority")
 
+            # Add agent_role column if missing
+            await cur.execute("""
+                SELECT COUNT(*) FROM information_schema.COLUMNS
+                WHERE TABLE_SCHEMA = DATABASE()
+                  AND TABLE_NAME = 'wb_agents'
+                  AND COLUMN_NAME = 'agent_role'
+            """)
+            row = await cur.fetchone()
+            if row[0] == 0:
+                await cur.execute("ALTER TABLE wb_agents ADD COLUMN agent_role VARCHAR(20) DEFAULT 'operator' AFTER owner_team")
+                # Migrate existing: mcp/none types are likely orchestrators
+                await cur.execute("UPDATE wb_agents SET agent_role = 'orchestrator' WHERE api_type IN ('mcp', 'none')")
+
             # Create interactions table if missing
             await cur.execute("""
                 CREATE TABLE IF NOT EXISTS wb_agent_interactions (
@@ -134,16 +147,21 @@ async def ensure_schema():
 
 # ---- Agents ----
 
-async def list_agents() -> list[dict]:
+async def list_agents(role: str | None = None) -> list[dict]:
     pool = await get_pool()
     async with pool.acquire() as conn:
         async with conn.cursor(dict_cursor()) as cur:
-            await cur.execute("""
+            query = """
                 SELECT s.*, COUNT(uc.id) as use_case_count
                 FROM wb_agents s
                 LEFT JOIN wb_use_cases uc ON uc.agent_id = s.id
-                GROUP BY s.id ORDER BY s.name
-            """)
+            """
+            params = []
+            if role:
+                query += " WHERE s.agent_role = %s"
+                params.append(role)
+            query += " GROUP BY s.id ORDER BY s.name"
+            await cur.execute(query, params)
             rows = await cur.fetchall()
     return [_row_to_agent(r) for r in rows]
 
@@ -162,10 +180,10 @@ async def get_agent(agent_id: str) -> dict | None:
 async def create_agent(data: dict) -> dict:
     sid = _new_id()
     pool = await get_pool()
-    cols = ["id", "name", "description", "category", "owner_team",
+    cols = ["id", "name", "description", "category", "owner_team", "agent_role",
             "api_type", "api_base_url", "api_docs_url", "api_auth_type", "api_auth_config"]
     vals = [sid, data["name"], data.get("description", ""), data.get("category", ""),
-            data.get("owner_team", ""), data.get("api_type", "rest"),
+            data.get("owner_team", ""), data.get("agent_role", "operator"), data.get("api_type", "rest"),
             data.get("api_base_url", ""), data.get("api_docs_url", ""),
             data.get("api_auth_type", "bearer"),
             json.dumps(data["api_auth_config"]) if data.get("api_auth_config") else None]

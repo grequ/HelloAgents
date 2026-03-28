@@ -6,6 +6,7 @@ export interface Agent {
   description: string;
   category: string;
   owner_team: string;
+  agent_role: "operator" | "orchestrator";
   api_type: string;
   api_base_url: string;
   api_docs_url?: string;
@@ -25,7 +26,7 @@ export interface AgentConfig {
   agent_name: string;
   tech_stack: string;
   framework: string;
-  agent_role: string;
+  agent_persona: string;
   deployment: string;
   error_handling: string;
   auth_notes: string;
@@ -58,6 +59,7 @@ export interface AgentCreate {
   description?: string;
   category?: string;
   owner_team?: string;
+  agent_role?: "operator" | "orchestrator";
   api_type?: string;
   api_base_url?: string;
 }

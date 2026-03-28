@@ -11,7 +11,9 @@ interface ToolDef { name: string; description?: string }
 interface MapNode {
   id: string;
   name: string;
+  agentRole: string;
   tools: ToolDef[];
+  connectedOperators: string[];
   status: string;
   linkTo: string;
   hasSpec: boolean;
@@ -35,8 +37,9 @@ const CARD_HEADER = 48;
 const CARD_PADDING_BOTTOM = 16;
 
 function cardHeight(node: MapNode): number {
-  const toolsH = Math.max(node.tools.length, 1) * TOOL_LINE_H;
-  return Math.max(CARD_MIN_H, CARD_HEADER + toolsH + CARD_PADDING_BOTTOM);
+  const items = node.agentRole === "orchestrator" ? node.connectedOperators : node.tools;
+  const linesH = Math.max(items.length, 1) * TOOL_LINE_H;
+  return Math.max(CARD_MIN_H, CARD_HEADER + linesH + CARD_PADDING_BOTTOM);
 }
 
 function parseTools(toolsJson: unknown): ToolDef[] {
@@ -46,9 +49,43 @@ function parseTools(toolsJson: unknown): ToolDef[] {
     .map((t) => ({ name: t.name, description: t.description }));
 }
 
+// --- Build a map of orchestrator agent_id → connected operator names ---
+
+function buildOrchestratorConnections(agents: Agent[], interactions: InteractionRow[]): Map<string, string[]> {
+  const agentById = new Map(agents.map((a) => [a.id, a]));
+  const connMap = new Map<string, string[]>();
+
+  for (const agent of agents) {
+    if (agent.agent_role === "orchestrator") {
+      const names: string[] = [];
+      const seen = new Set<string>();
+      for (const row of interactions) {
+        // Orchestrator calls operator (from = orchestrator, to = operator)
+        if (row.from_agent_id === agent.id && row.from_agent_id !== row.to_agent_id) {
+          const target = agentById.get(row.to_agent_id);
+          if (target && !seen.has(target.id)) {
+            seen.add(target.id);
+            names.push(target.name);
+          }
+        }
+        // Operator provides to orchestrator (to = orchestrator)
+        if (row.to_agent_id === agent.id && row.from_agent_id !== row.to_agent_id) {
+          const source = agentById.get(row.from_agent_id);
+          if (source && !seen.has(source.id)) {
+            seen.add(source.id);
+            names.push(source.name);
+          }
+        }
+      }
+      connMap.set(agent.id, names);
+    }
+  }
+  return connMap;
+}
+
 // --- Build nodes from agents (primary) enriched with spec data ---
 
-function buildNodes(agents: Agent[], specs: AgentSpec[]): MapNode[] {
+function buildNodes(agents: Agent[], specs: AgentSpec[], interactions: InteractionRow[]): MapNode[] {
   // Map agent_id → spec (best match)
   const agentToSpec = new Map<string, AgentSpec>();
   for (const spec of specs) {
@@ -57,12 +94,16 @@ function buildNodes(agents: Agent[], specs: AgentSpec[]): MapNode[] {
     }
   }
 
+  const orchConnections = buildOrchestratorConnections(agents, interactions);
+
   return agents.map((agent) => {
     const spec = agentToSpec.get(agent.id);
     return {
       id: agent.id,
       name: agent.name,
+      agentRole: agent.agent_role,
       tools: spec ? parseTools(spec.tools_json) : [],
+      connectedOperators: orchConnections.get(agent.id) || [],
       status: spec ? spec.status : agent.status,
       linkTo: spec ? `/workbench/specs/${spec.id}` : `/workbench/agents/${agent.id}`,
       hasSpec: !!spec,
@@ -110,7 +151,6 @@ function layoutNodes(nodes: MapNode[], edges: Edge[]): void {
 
   let depth = 0;
   while (assigned.size < nodes.length && depth < 10) {
-    const cur = layers[depth] || [];
     const next: string[] = [];
     for (const n of nodes) {
       if (!assigned.has(n.id)) {
@@ -151,7 +191,7 @@ export default function AgentMap() {
   const { data: agents = [], isLoading: agentsLoading } = useAgents();
   const { data: interactions = [], isLoading: intLoading } = useAllInteractions();
 
-  const nodes = useMemo(() => buildNodes(agents, specs), [agents, specs]);
+  const nodes = useMemo(() => buildNodes(agents, specs, interactions), [agents, specs, interactions]);
   const edges = useMemo(() => buildEdges(agents, interactions), [agents, interactions]);
 
   useMemo(() => layoutNodes(nodes, edges), [nodes, edges]);
@@ -232,22 +272,35 @@ export default function AgentMap() {
             );
           })}
 
-          {/* Nodes — every agent appears, with or without a spec */}
+          {/* Nodes -- every agent appears, with or without a spec */}
           {nodes.map((node) => {
             const h = cardHeight(node);
             const nameText = node.name.length > 28 ? node.name.slice(0, 26) + "..." : node.name;
+            const isOrchestrator = node.agentRole === "orchestrator";
+
             const statusColor = node.hasSpec
               ? (node.status === "generated" ? { bg: "#dcfce7", text: "#166534" } : { bg: "#f3f4f6", text: "#6b7280" })
               : { bg: "#fef3c7", text: "#92400e" };
             const statusLabel = node.hasSpec ? node.status : "no spec";
 
+            const topBarColor = isOrchestrator ? "#7c3aed" : "#34CFFD";
+            const borderColor = node.hasSpec
+              ? (isOrchestrator ? "#c4b5fd" : "#e5e7eb")
+              : "#fde68a";
+
+            const sectionLabel = isOrchestrator ? "CONNECTED" : "TOOLS";
+            const items = isOrchestrator ? node.connectedOperators : node.tools;
+            const emptyText = isOrchestrator
+              ? (node.hasSpec ? "(no connected operators)" : "(generate spec to see connections)")
+              : (node.hasSpec ? "(no tools defined)" : "(generate spec to see tools)");
+
             return (
               <g key={node.id} className="cursor-pointer">
                 <rect x={node.x} y={node.y} width={CARD_W} height={h} rx={12} ry={12}
-                  fill="white" stroke={node.hasSpec ? "#e5e7eb" : "#fde68a"} strokeWidth={1}
+                  fill="white" stroke={borderColor} strokeWidth={1}
                   filter="url(#cardShadow)" />
                 <rect x={node.x + 1} y={node.y + 1} width={CARD_W - 2} height={5} rx={2}
-                  fill={node.hasSpec ? "#34CFFD" : "#fbbf24"} />
+                  fill={topBarColor} />
 
                 <a href={node.linkTo}>
                   <text x={node.x + 16} y={node.y + 30} fontSize={14} fontWeight={700} fill="#22345A">
@@ -264,17 +317,20 @@ export default function AgentMap() {
                   {statusLabel}
                 </text>
 
-                {/* Tools */}
+                {/* Section: Tools or Connected Operators */}
                 <text x={node.x + 16} y={node.y + CARD_HEADER} fontSize={10} fill="#A9A9A9"
-                  fontWeight={600} letterSpacing="0.05em">TOOLS</text>
-                {node.tools.length > 0 ? node.tools.map((tool, ti) => (
-                  <text key={ti} x={node.x + 16} y={node.y + CARD_HEADER + 16 + ti * TOOL_LINE_H}
-                    fontSize={12} fill="#1e293b" fontFamily="'Cascadia Code','Fira Code',monospace">
-                    {tool.name}
-                  </text>
-                )) : (
+                  fontWeight={600} letterSpacing="0.05em">{sectionLabel}</text>
+                {items.length > 0 ? items.map((item, ti) => {
+                  const label = typeof item === "string" ? item : item.name;
+                  return (
+                    <text key={ti} x={node.x + 16} y={node.y + CARD_HEADER + 16 + ti * TOOL_LINE_H}
+                      fontSize={12} fill="#1e293b" fontFamily="'Cascadia Code','Fira Code',monospace">
+                      {label}
+                    </text>
+                  );
+                }) : (
                   <text x={node.x + 16} y={node.y + CARD_HEADER + 16} fontSize={12} fill="#9ca3af" fontStyle="italic">
-                    {node.hasSpec ? "(no tools defined)" : "(generate spec to see tools)"}
+                    {emptyText}
                   </text>
                 )}
               </g>
@@ -286,16 +342,16 @@ export default function AgentMap() {
       {/* Legend */}
       <div className="flex items-center gap-6 mt-4 text-xs text-gray-500">
         <div className="flex items-center gap-2">
+          <div className="w-4 h-1.5 rounded" style={{ backgroundColor: "#34CFFD" }} />
+          <span>Operator</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="w-4 h-1.5 rounded" style={{ backgroundColor: "#7c3aed" }} />
+          <span>Orchestrator</span>
+        </div>
+        <div className="flex items-center gap-2">
           <svg width="32" height="8"><line x1="0" y1="4" x2="26" y2="4" stroke="#94a3b8" strokeWidth={1.5} /><polygon points="26,1 32,4 26,7" fill="#94a3b8" /></svg>
-          <span>asks / calls</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <div className="w-4 h-1.5 bg-tedee-cyan rounded" />
-          <span>Has spec</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <div className="w-4 h-1.5 bg-amber-400 rounded" />
-          <span>No spec yet</span>
+          <span>orchestrates</span>
         </div>
         <span className="text-gray-400">Click agent name to open detail</span>
       </div>

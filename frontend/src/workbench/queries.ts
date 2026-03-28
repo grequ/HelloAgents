@@ -34,6 +34,10 @@ export function useAgents() {
   return useQuery({ queryKey: keys.agents, queryFn: api.listAgents });
 }
 
+export function useOperators() {
+  return useQuery({ queryKey: ["operators"], queryFn: api.listOperators });
+}
+
 export function useAgent(id: string) {
   return useQuery({
     queryKey: keys.agent(id),

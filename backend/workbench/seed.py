@@ -9,6 +9,7 @@ DEMO_AGENTS = [
         "name": "DummyJSON - Product Catalog",
         "description": "E-commerce product catalog with search, categories, and inventory. Real public API, no auth required.",
         "category": "e-commerce",
+        "agent_role": "operator",
         "owner_team": "Product & Catalog",
         "api_type": "rest",
         "api_base_url": "https://dummyjson.com",
@@ -115,6 +116,7 @@ DEMO_AGENTS = [
         "name": "DummyJSON - Users & Customers",
         "description": "Customer/user management with profiles, addresses, and contact info. Real public API, no auth required.",
         "category": "crm",
+        "agent_role": "operator",
         "owner_team": "Customer Service",
         "api_type": "rest",
         "api_base_url": "https://dummyjson.com",
@@ -196,6 +198,7 @@ DEMO_AGENTS = [
         "name": "DummyJSON - Orders & Carts",
         "description": "Shopping cart and order management with products, quantities, and totals. Real public API, no auth required.",
         "category": "logistics",
+        "agent_role": "operator",
         "owner_team": "Fulfillment",
         "api_type": "rest",
         "api_base_url": "https://dummyjson.com",
@@ -274,6 +277,43 @@ DEMO_AGENTS = [
             },
         ],
     },
+    {
+        "name": "E-Commerce Support Orchestrator",
+        "description": "High-level orchestrator that coordinates across product catalog, customer management, and order processing to handle end-to-end customer support inquiries.",
+        "category": "support",
+        "agent_role": "orchestrator",
+        "api_type": "none",
+        "api_base_url": "",
+        "use_cases": [
+            {
+                "name": "Handle product inquiry",
+                "description": "Customer asks about a product; orchestrator queries the product catalog operator for details, availability, and pricing.",
+                "trigger_text": "Customer asks 'do you have wireless headphones?' or 'tell me about product X'",
+                "user_input": "Customer question about a product",
+                "expected_output": "Product details including name, price, availability, and description sourced from the product catalog operator",
+                "frequency": "~400/day",
+                "is_write": False,
+            },
+            {
+                "name": "Process return request",
+                "description": "Customer wants to return an item; orchestrator coordinates between the orders operator to look up the order and the product catalog operator to verify item details and return eligibility.",
+                "trigger_text": "Customer says 'I want to return the laptop from my last order'",
+                "user_input": "Customer ID or order ID, item to return",
+                "expected_output": "Order confirmation, item match, return eligibility status, and next steps",
+                "frequency": "~80/day",
+                "is_write": False,
+            },
+            {
+                "name": "Full order status check",
+                "description": "Customer asks about order status; orchestrator queries the orders operator for order details and the users operator for customer context to provide a complete status update.",
+                "trigger_text": "Customer asks 'where is my order?' or 'what's the status of order #5?'",
+                "user_input": "Order ID or customer ID",
+                "expected_output": "Complete order status including items, totals, customer shipping address, and delivery context",
+                "frequency": "~250/day",
+                "is_write": False,
+            },
+        ],
+    },
 ]
 
 
@@ -284,6 +324,7 @@ async def seed_demo_data():
         return {"seeded": False, "message": "Data already exists", "agents": len(existing)}
 
     created = []
+    agents_by_name = {}
     for agent_data in DEMO_AGENTS:
         use_cases = agent_data.pop("use_cases", [])
         api_spec = agent_data.pop("api_spec", None)
@@ -292,9 +333,28 @@ async def seed_demo_data():
         if api_spec:
             await wb_db.set_agent_api_spec(agent["id"], api_spec)
 
+        uc_ids = []
         for uc_data in use_cases:
-            await wb_db.create_use_case(agent["id"], uc_data)
+            uc = await wb_db.create_use_case(agent["id"], uc_data)
+            uc_ids.append(uc["id"])
 
+        agents_by_name[agent_data["name"]] = {"id": agent["id"], "use_case_ids": uc_ids}
         created.append({"name": agent_data["name"], "id": agent["id"], "use_cases": len(use_cases)})
+
+    # Link orchestrator to the 3 operators
+    orch = agents_by_name["E-Commerce Support Orchestrator"]
+    product = agents_by_name["DummyJSON - Product Catalog"]
+    users = agents_by_name["DummyJSON - Users & Customers"]
+    orders = agents_by_name["DummyJSON - Orders & Carts"]
+
+    await wb_db.save_interactions(
+        orch["id"],
+        asks=[
+            {"target_agent_id": product["id"], "use_case_ids": product["use_case_ids"]},
+            {"target_agent_id": users["id"], "use_case_ids": users["use_case_ids"]},
+            {"target_agent_id": orders["id"], "use_case_ids": orders["use_case_ids"]},
+        ],
+        provides_to=[],
+    )
 
     return {"seeded": True, "agents": created}

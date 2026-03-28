@@ -38,8 +38,13 @@ async def seed():
 # ---- Agents CRUD ----
 
 @router.get("/agents", response_model=list[AgentOut])
-async def list_agents():
-    return await wb_db.list_agents()
+async def list_agents(role: str | None = None):
+    return await wb_db.list_agents(role=role)
+
+
+@router.get("/agents/operators", response_model=list[AgentOut])
+async def list_operators():
+    return await wb_db.list_agents(role="operator")
 
 
 @router.post("/agents", response_model=AgentOut)
@@ -373,7 +378,34 @@ async def generate_spec(body: GenerateSpecRequest):
                 use_cases.extend(ucs)
 
         config_dict = body.config.model_dump() if body.config else None
-        result = await generate(body.agent_name, agents, use_cases, config=config_dict)
+
+        # Detect role: if any agent in the list is an orchestrator, use orchestrator generation
+        role = "operator"
+        connected_operators = None
+        for a in agents:
+            if a.get("agent_role") == "orchestrator":
+                role = "orchestrator"
+                break
+
+        if role == "orchestrator":
+            # Fetch connected operators from interactions (asks = operators this agent calls)
+            connected_operators = []
+            for a in agents:
+                if a.get("agent_role") != "orchestrator":
+                    continue
+                interactions = await wb_db.get_interactions(a["id"])
+                for ask in interactions.get("asks", []):
+                    target_id = ask.get("target_agent_id")
+                    if target_id:
+                        op = await wb_db.get_agent(target_id)
+                        if op:
+                            connected_operators.append(op)
+
+        result = await generate(
+            body.agent_name, agents, use_cases,
+            config=config_dict, role=role,
+            connected_operators=connected_operators,
+        )
 
         spec = await wb_db.create_spec({
             "name": body.agent_name,

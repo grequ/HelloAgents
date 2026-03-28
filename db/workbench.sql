@@ -6,6 +6,7 @@ CREATE TABLE IF NOT EXISTS wb_agents (
     description     TEXT,
     category        VARCHAR(50),
     owner_team      VARCHAR(200),
+    agent_role      VARCHAR(20) DEFAULT 'operator',
     api_type        VARCHAR(20) DEFAULT 'rest',
     api_base_url    VARCHAR(500),
     api_docs_url    VARCHAR(500),

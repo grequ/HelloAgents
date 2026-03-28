@@ -12,6 +12,7 @@ class AgentCreate(BaseModel):
     description: str = ""
     category: str = ""
     owner_team: str = ""
+    agent_role: str = "operator"
     api_type: str = "rest"
     api_base_url: str = ""
     api_docs_url: str = ""
@@ -24,6 +25,7 @@ class AgentUpdate(BaseModel):
     description: str | None = None
     category: str | None = None
     owner_team: str | None = None
+    agent_role: str | None = None
     api_type: str | None = None
     api_base_url: str | None = None
     api_docs_url: str | None = None
@@ -38,6 +40,7 @@ class AgentOut(BaseModel):
     description: str | None
     category: str | None
     owner_team: str | None
+    agent_role: str = "operator"
     api_type: str
     api_base_url: str | None
     api_docs_url: str | None
@@ -115,7 +118,7 @@ class SpecConfig(BaseModel):
     tech_stack: str = "Python 3.11"
     framework: str = "FastAPI + anthropic SDK"
     python_version: str = "3.11"
-    agent_role: str = ""
+    agent_persona: str = ""
     deployment: str = ""
     interactions: str = ""
     error_handling: str = ""

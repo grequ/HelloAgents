@@ -76,6 +76,10 @@ export async function testUrl(url: string, apiKey: string, authType: string): Pr
   return request<ConnectionResult>("POST", "/test-url", { url, api_key: apiKey, auth_type: authType });
 }
 
+export async function listOperators(): Promise<Agent[]> {
+  return request<Agent[]>("GET", "/agents/operators");
+}
+
 // Interactions (relational)
 export interface InteractionRow {
   id: string;
