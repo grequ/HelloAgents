@@ -7,7 +7,6 @@ import {
   useSetApiKey, useUploadSpec, useTestConnection, useGenerateSpec,
   useSaveAgentConfig,
 } from "./queries";
-import { generateSpecFromDocs } from "./api";
 import { btnPrimary, btnSecondary, btnDanger, btnGhost, btnGhostDanger, btnGhostCyan, inp } from "./ui";
 
 // --- Auto-sizing textarea ---
@@ -135,50 +134,30 @@ export default function OperatorDetail() {
     const input = specInput.trim();
     if (!input) return;
 
-    const lines = input.split("\n").map((l) => l.trim()).filter(Boolean);
-    const urls = lines.filter((l) => l.startsWith("http://") || l.startsWith("https://"));
-
-    // Case 1: All lines are URLs
-    if (urls.length > 0 && urls.length === lines.length) {
+    // URL → fetch the swagger.json from the server
+    if (input.startsWith("http://") || input.startsWith("https://")) {
       setSpecLoading(true);
-
-      // Single URL ending in .json → try direct server-side fetch first
-      if (urls.length === 1 && (urls[0].endsWith(".json") || urls[0].endsWith(".yaml"))) {
-        try {
-          // Use backend to fetch (avoids CORS)
-          const spec = await generateSpecFromDocs(urls, agent?.name || "", agent?.api_base_url || "");
-          if (spec && (spec.openapi || spec.swagger || spec.paths)) {
-            await uploadSpec.mutateAsync({ id: id!, spec });
-            setSpecInput("");
-            setSpecLoading(false);
-            return;
-          }
-        } catch { /* fall through to AI generation */ }
-      }
-
-      // Send all URLs to backend — fetches pages server-side, AI generates spec
       try {
-        const spec = await generateSpecFromDocs(urls, agent?.name || "", agent?.api_base_url || "");
-        if (spec && (spec.openapi || spec.swagger || spec.paths)) {
-          await uploadSpec.mutateAsync({ id: id!, spec });
-          setSpecInput("");
-        } else {
-          alert("AI could not generate a valid spec from the provided URLs.");
-        }
+        const resp = await fetch(input);
+        if (!resp.ok) { alert(`Failed to fetch: ${resp.status} ${resp.statusText}`); setSpecLoading(false); return; }
+        const spec = await resp.json();
+        await uploadSpec.mutateAsync({ id: id!, spec });
+        setSpecInput("");
       } catch (e: unknown) {
-        alert("Failed to generate spec from docs: " + (e instanceof Error ? e.message : "Unknown error"));
+        alert("Failed to fetch or parse JSON from URL: " + (e instanceof Error ? e.message : "Unknown error"));
+      } finally {
+        setSpecLoading(false);
       }
-      setSpecLoading(false);
       return;
     }
 
-    // Case 2: Raw JSON
+    // Raw JSON
     try {
       const spec = JSON.parse(input);
       await uploadSpec.mutateAsync({ id: id!, spec });
       setSpecInput("");
     } catch {
-      alert("Could not parse input.\n\nAccepted formats:\n• Raw OpenAPI JSON\n• One or more documentation URLs (one per line)");
+      alert("Invalid JSON.\n\nPaste either:\n• A Swagger/OpenAPI JSON spec\n• A URL to a swagger.json file (e.g. https://petstore.swagger.io/v2/swagger.json)");
     }
   };
 
@@ -254,7 +233,7 @@ export default function OperatorDetail() {
               </div>
               <div className="flex gap-2">
                 <textarea className={`${inp} flex-1`}
-                  placeholder={isMcp ? "Paste MCP tool definitions JSON..." : "Paste OpenAPI JSON, a spec URL, or documentation URLs (one per line) — AI will generate the spec"}
+                  placeholder={isMcp ? "Paste MCP tool definitions JSON..." : "Paste Swagger/OpenAPI JSON or a URL (e.g. https://petstore.swagger.io/v2/swagger.json)"}
                   rows={2} value={specInput} onChange={(e) => setSpecInput(e.target.value)} />
                 <button className={`${btnGhost} self-start`} onClick={handleUploadSpec} disabled={specLoading}>
                   {specLoading ? "Fetching..." : isMcp ? "Upload Tools" : "Upload Spec"}
