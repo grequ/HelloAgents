@@ -186,17 +186,33 @@ export default function SystemDetail() {
   // --- Save all ---
 
   const handleSave = async () => {
-    const config: AgentConfig = { ...genConfig, };
-    // Save config
-    await saveConfig.mutateAsync({ id: id!, config });
-    // Save interactions
-    await saveInteractionsMut.mutateAsync({
-      systemId: id!,
-      asks: asksAgents.map((a) => ({ target_system_id: a.target_system_id, use_case_ids: a.use_case_ids })),
-      provides_to: providesToAgents.map((p) => ({ source_system_id: p.source_system_id, use_case_ids: p.use_case_ids })),
-    });
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
+    const errors: string[] = [];
+
+    // Save config (agent_config JSON on wb_systems)
+    try {
+      const config: AgentConfig = { ...genConfig };
+      await saveConfig.mutateAsync({ id: id!, config });
+    } catch (e: unknown) {
+      errors.push("Config: " + (e instanceof Error ? e.message : "unknown error"));
+    }
+
+    // Save interactions (wb_agent_interactions table)
+    try {
+      await saveInteractionsMut.mutateAsync({
+        systemId: id!,
+        asks: asksAgents.map((a) => ({ target_system_id: a.target_system_id, use_case_ids: a.use_case_ids })),
+        provides_to: providesToAgents.map((p) => ({ source_system_id: p.source_system_id, use_case_ids: p.use_case_ids })),
+      });
+    } catch (e: unknown) {
+      errors.push("Interactions: " + (e instanceof Error ? e.message : "unknown error"));
+    }
+
+    if (errors.length > 0) {
+      alert("Save failed:\n" + errors.join("\n") + "\n\nYou may need to run the DB migration — see the commit message for SQL.");
+    } else {
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
+    }
   };
 
   const isSaving = saveConfig.isPending || saveInteractionsMut.isPending;

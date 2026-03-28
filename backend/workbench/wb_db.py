@@ -50,6 +50,38 @@ def _row_to_spec(row: dict) -> dict:
     return row
 
 
+# ---- Migrations (idempotent) ----
+
+async def ensure_schema():
+    """Run on startup to add any missing columns/tables."""
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        async with conn.cursor() as cur:
+            # Add agent_config column if missing
+            await cur.execute("""
+                SELECT COUNT(*) FROM information_schema.COLUMNS
+                WHERE TABLE_SCHEMA = DATABASE()
+                  AND TABLE_NAME = 'wb_systems'
+                  AND COLUMN_NAME = 'agent_config'
+            """)
+            row = await cur.fetchone()
+            if row[0] == 0:
+                await cur.execute("ALTER TABLE wb_systems ADD COLUMN agent_config JSON")
+
+            # Create interactions table if missing
+            await cur.execute("""
+                CREATE TABLE IF NOT EXISTS wb_agent_interactions (
+                    id              CHAR(36) PRIMARY KEY,
+                    from_system_id  CHAR(36) NOT NULL,
+                    to_system_id    CHAR(36) NOT NULL,
+                    use_case_ids    JSON,
+                    created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (from_system_id) REFERENCES wb_systems(id) ON DELETE CASCADE,
+                    FOREIGN KEY (to_system_id) REFERENCES wb_systems(id) ON DELETE CASCADE
+                )
+            """)
+
+
 # ---- Systems ----
 
 async def list_systems() -> list[dict]:
