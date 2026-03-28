@@ -7,9 +7,9 @@ import anthropic
 client = anthropic.Anthropic()
 
 
-async def generate(agent_name: str, systems: list[dict], use_cases: list[dict],
+async def generate(agent_name: str, agents: list[dict], use_cases: list[dict],
                    config: dict | None = None) -> dict:
-    """Generate a complete agent spec from systems, use cases, and config.
+    """Generate a complete agent spec from agents, use cases, and config.
 
     config may contain:
         tech_stack, framework, python_version, agent_role, deployment,
@@ -19,10 +19,10 @@ async def generate(agent_name: str, systems: list[dict], use_cases: list[dict],
     """
     config = config or {}
 
-    # Build context from systems
-    systems_ctx = []
+    # Build context from agents
+    agents_ctx = []
     api_specs_ctx = []
-    for s in systems:
+    for s in agents:
         spec_summary = ""
         endpoints_detail = ""
         if s.get("api_spec") and isinstance(s["api_spec"], dict):
@@ -33,7 +33,7 @@ async def generate(agent_name: str, systems: list[dict], use_cases: list[dict],
                 for method, details in methods.items():
                     if method in ("get", "post", "put", "patch", "delete"):
                         endpoints_detail += f"\n  - {method.upper()} {path}: {details.get('summary', details.get('operationId', ''))}"
-        systems_ctx.append(
+        agents_ctx.append(
             f"### {s['name']}\n"
             f"- Description: {s.get('description', '')}\n"
             f"- Type: {s.get('api_type', 'rest')}{spec_summary}\n"
@@ -105,8 +105,8 @@ implement the agent from scratch. It must contain EVERYTHING needed — no exter
 
 {config_section}
 
-## Connected Systems
-{chr(10).join(systems_ctx)}
+## Connected Agents
+{chr(10).join(agents_ctx)}
 
 ## Use Cases (with discovery and test data)
 ```json
@@ -132,8 +132,8 @@ Purpose, domain, what this agent does. 1-2 paragraphs.
 ## Technology Stack
 Language, framework, dependencies with versions. Be specific.
 
-## Connected Systems
-For EACH system: name, base URL, auth method, key endpoints with HTTP method + path + description.
+## Connected Agents
+For EACH agent: name, base URL, auth method, key endpoints with HTTP method + path + description.
 
 ## Agent Role & Persona
 How the agent should behave, tone, boundaries. This becomes the system prompt.

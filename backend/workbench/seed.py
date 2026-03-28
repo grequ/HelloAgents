@@ -1,10 +1,10 @@
-"""Seed data for the workbench — creates demo systems with prefilled use cases
+"""Seed data for the workbench — creates demo agents with prefilled use cases
 using real, publicly available APIs that can be tested immediately."""
 
 from workbench import wb_db
 
 
-DEMO_SYSTEMS = [
+DEMO_AGENTS = [
     {
         "name": "DummyJSON - Product Catalog",
         "description": "E-commerce product catalog with search, categories, and inventory. Real public API, no auth required.",
@@ -290,23 +290,23 @@ DEMO_SYSTEMS = [
 
 
 async def seed_demo_data():
-    """Create demo systems with prefilled use cases. Skips if data already exists."""
-    existing = await wb_db.list_systems()
+    """Create demo agents with prefilled use cases. Skips if data already exists."""
+    existing = await wb_db.list_agents()
     if existing:
-        return {"seeded": False, "message": "Data already exists", "systems": len(existing)}
+        return {"seeded": False, "message": "Data already exists", "agents": len(existing)}
 
     created = []
-    for sys_data in DEMO_SYSTEMS:
-        use_cases = sys_data.pop("use_cases", [])
-        api_spec = sys_data.pop("api_spec", None)
+    for agent_data in DEMO_AGENTS:
+        use_cases = agent_data.pop("use_cases", [])
+        api_spec = agent_data.pop("api_spec", None)
 
-        system = await wb_db.create_system(sys_data)
+        agent = await wb_db.create_agent(agent_data)
         if api_spec:
-            await wb_db.set_system_api_spec(system["id"], api_spec)
+            await wb_db.set_agent_api_spec(agent["id"], api_spec)
 
         for uc_data in use_cases:
-            await wb_db.create_use_case(system["id"], uc_data)
+            await wb_db.create_use_case(agent["id"], uc_data)
 
-        created.append({"name": sys_data["name"], "id": system["id"], "use_cases": len(use_cases)})
+        created.append({"name": agent_data["name"], "id": agent["id"], "use_cases": len(use_cases)})
 
-    return {"seeded": True, "systems": created}
+    return {"seeded": True, "agents": created}

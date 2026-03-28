@@ -13,8 +13,8 @@ multi-agent AI systems:
 
 2. **Agent Migration Workbench** — An interactive module that guides an
    organization through migrating to an agent-based architecture. It provides a
-   structured workflow: inventory your systems, document their APIs, define use
-   cases, test how an AI agent would interact with each system, and generate
+   structured workflow: inventory your agents, document their APIs, define use
+   cases, test how an AI agent would interact with each one, and generate
    production-ready agent specifications. The output is a complete migration
    roadmap with tested, validated agent specs.
 
@@ -58,44 +58,11 @@ multi-agent AI systems:
 
 ### Component Patterns
 
-#### Status/Severity Cards (used for AI findings, alerts, data quality)
-
-| Level   | Style                                                        |
-|---------|--------------------------------------------------------------|
-| ERROR   | `border-l-4 border-red-500, bg-red-50, text-red-800`        |
-| WARNING | `border-l-4 border-amber-500, bg-amber-50, text-amber-800`  |
-| INFO    | `border-l-4 border-blue-500, bg-blue-50, text-blue-800`     |
-
 #### Buttons
 
 - **Primary:** `bg-[#34CFFD] text-[#22345A] font-semibold rounded-lg hover:bg-[#2bb8e0]`
 - **Secondary/ghost:** `text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg`
 - **Danger:** `bg-red-500 text-white hover:bg-red-600 rounded-lg`
-
-#### Data Grids
-
-- AG Grid with `.ag-theme-alpine` base, custom overrides for brand colors
-- Spreadsheet-style editing with inline dropdowns, date pickers, number inputs
-- Color-coded cells for validation (green = OK, yellow = warning, red = error)
-
-#### Role Badge Colors
-
-| Role    | Color            |
-|---------|------------------|
-| Admin   | red              |
-| Editor  | cyan (`#34CFFD`) |
-| Visitor | gray             |
-
-### AI Assistant Pattern
-
-- **Name:** "Goldy" — subtitle adapted to domain (e.g. "Migration Assistant")
-- **Side panel:** 384px wide, slides in from right
-- **Identity line:** "I'm Goldy, your virtual migration guide."
-- **User messages:** `bg-[#34CFFD]/10` (light cyan background)
-- **Assistant messages:** white background, parsed for structured findings
-- **Loading state:** pulsing cyan dot + "[Name] is reviewing..."
-- **Default prompts:** 3 contextual suggestions shown on empty state
-- **Output protocol:** structured line-prefix format (`SUMMARY:`, `ERROR:`, `WARNING:`, `INFO:`, `LINK:`, `OPTIONS:`, `PASSED:`) parsed into styled cards
 
 ### Design Principles
 
@@ -103,23 +70,20 @@ multi-agent AI systems:
 - **Real-time validation:** Data issues flagged immediately, not after the fact
 - **No duplication:** Reference data maintained once, referenced everywhere
 - **Role-based visibility:** Sensitive data hidden from unauthorized roles
-- **Spreadsheet-familiar:** AG Grid for data-heavy views — users coming from Excel feel at home
 - **Card-based dashboard:** Summary metrics at the top, detail cards below, alerts inline
 
 ---
 
 ## Tech Stack
 
-| Layer      | Technology                    |
-|------------|-------------------------------|
-| Frontend   | React 19 + TypeScript         |
-| Styling    | Tailwind CSS v4               |
-| Data grids | AG Grid                       |
-| State      | TanStack Query (React Query)  |
-| Backend    | Python + FastAPI              |
-| ORM        | SQLAlchemy 2.0                |
-| Database   | MySQL 8 (Docker)              |
-| AI         | Claude API with tool-use loop |
+| Layer    | Technology                    |
+|----------|-------------------------------|
+| Frontend | React 19 + TypeScript         |
+| Styling  | Tailwind CSS v4               |
+| State    | TanStack Query (React Query)  |
+| Backend  | Python + FastAPI              |
+| Database | MySQL 8 (Docker) via aiomysql |
+| AI       | Claude API with tool-use loop |
 
 ---
 
@@ -145,7 +109,7 @@ CREATE TABLE orders (
 ### Workbench Tables
 
 ```sql
-CREATE TABLE wb_systems (
+CREATE TABLE wb_agents (
     id              CHAR(36) PRIMARY KEY,
     name            VARCHAR(200) NOT NULL,
     description     TEXT,
@@ -165,7 +129,7 @@ CREATE TABLE wb_systems (
 
 CREATE TABLE wb_use_cases (
     id                  CHAR(36) PRIMARY KEY,
-    system_id           CHAR(36) NOT NULL REFERENCES wb_systems(id) ON DELETE CASCADE,
+    agent_id            CHAR(36) NOT NULL REFERENCES wb_agents(id) ON DELETE CASCADE,
     name                VARCHAR(200) NOT NULL,
     description         TEXT,
     trigger_text        TEXT,
@@ -185,7 +149,7 @@ CREATE TABLE wb_use_cases (
 CREATE TABLE wb_agent_specs (
     id              CHAR(36) PRIMARY KEY,
     name            VARCHAR(200) NOT NULL,
-    system_ids      JSON,               -- array of system UUIDs
+    agent_ids       JSON,               -- array of agent UUIDs
     use_case_ids    JSON,               -- array of use case UUIDs
     spec_markdown   LONGTEXT,
     tools_json      JSON,
@@ -426,8 +390,8 @@ React single-page app (Vite) with two panels:
 
 An interactive module that guides an organization through the process of migrating
 to an agent-based architecture. It provides a structured workflow: inventory your
-systems, document their APIs, define use cases, test how an AI agent would interact
-with each system, and generate production-ready agent specifications.
+agents, document their APIs, define use cases, test how an AI agent would interact
+with each one, and generate production-ready agent specifications.
 
 The output is a **complete migration roadmap** with tested, validated agent specs
 that can be handed to an engineering team (or another AI agent) for implementation.
@@ -436,19 +400,19 @@ that can be handed to an engineering team (or another AI agent) for implementati
 
 ```
 ┌──────────────┐    ┌──────────────┐    ┌──────────────┐    ┌──────────────┐    ┌──────────────┐
-│  1. SYSTEMS  │───►│  2. APIs     │───►│  3. USE      │───►│  4. AGENT    │───►│  5. SPEC     │
+│  1. AGENTS   │───►│  2. APIs     │───►│  3. USE      │───►│  4. AGENT    │───►│  5. SPEC     │
 │  INVENTORY   │    │  & ACCESS    │    │  CASES       │    │  PLAYGROUND  │    │  GENERATION  │
 │              │    │              │    │              │    │              │    │              │
 │ List all     │    │ Document     │    │ Define what  │    │ Test agent   │    │ Generate     │
-│ systems your │    │ how each     │    │ humans do    │    │ behavior     │    │ production   │
-│ org uses     │    │ system is    │    │ with each    │    │ against real │    │ agent specs  │
-│              │    │ accessed     │    │ system today │    │ APIs         │    │              │
+│ agents your  │    │ how each     │    │ humans do    │    │ behavior     │    │ production   │
+│ org uses     │    │ agent is     │    │ with each    │    │ against real │    │ agent specs  │
+│              │    │ accessed     │    │ agent today  │    │ APIs         │    │              │
 └──────────────┘    └──────────────┘    └──────────────┘    └──────────────┘    └──────────────┘
 ```
 
 ### Workbench Data Model
 
-#### System
+#### Agent
 
 ```
 {
@@ -478,7 +442,7 @@ that can be handed to an engineering team (or another AI agent) for implementati
 ```
 {
     id:             UUID
-    system_id:      UUID            FK → System
+    agent_id:       UUID            FK → Agent
     name:           string          "Track package location"
     description:    string          "Customer asks where their package is"
 
@@ -507,7 +471,7 @@ that can be handed to an engineering team (or another AI agent) for implementati
 {
     id:             UUID
     name:           string          "Logistics Agent"
-    systems:        UUID[]          FK → Systems this agent covers
+    agents:         UUID[]          FK → Agents this spec covers
     use_cases:      UUID[]          FK → Use cases this agent handles
 
     spec_markdown:  text            Full human-readable spec
@@ -538,107 +502,104 @@ The landing page showing the overall migration status.
 │  Agent Migration Workbench                                      │
 ├────────────────────────────────────────────────────────────────┤
 │                                                                 │
-│  Progress:  ████████░░░░░░░░  12/30 systems documented          │
-│             ████░░░░░░░░░░░░   8/30 use cases tested            │
-│             ██░░░░░░░░░░░░░░   3/30 specs generated             │
+│  Stats:  Agents: 12    Use Cases: 30    Agent Specs: 3          │
 │                                                                 │
-│  ┌─────────────────────────────────────────────────────────┐   │
-│  │  SYSTEM MAP (visual grid or graph)                       │   │
-│  │                                                          │   │
-│  │  [SAP WMS]──────[Logistics Agent]──────[Support Orch.]   │   │
-│  │  [Carrier API]──┘                      │                 │   │
-│  │  [Customs]──────┘                      │                 │   │
-│  │                                        │                 │   │
-│  │  [Stripe]───────[Payment Agent]────────┘                 │   │
-│  │  [Invoice DB]───┘                                        │   │
-│  │                                                          │   │
-│  │  [CRM]──────────[Customer Agent]  (not yet connected)    │   │
-│  │  [Zendesk]──────┘                                        │   │
-│  │                                                          │   │
-│  └─────────────────────────────────────────────────────────┘   │
+│  [+ Add Agent]                                                 │
 │                                                                 │
-│  Systems by Status:                                             │
-│  [+ Add System]                                                 │
+│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐       │
+│  │ SAP WMS  │  │ Carrier  │  │ Stripe   │  │ CRM      │       │
+│  │ logistics│  │ logistics│  │ finance  │  │ crm      │       │
+│  │ tested   │  │ documented│ │ inventoried│ │ inventoried│     │
+│  └──────────┘  └──────────┘  └──────────┘  └──────────┘       │
 │                                                                 │
-│  Inventoried (5)    API Documented (3)    Tested (2)    Done (1)│
-│  ┌──────┐           ┌──────┐              ┌──────┐     ┌──────┐│
-│  │ CRM  │           │ WMS  │              │Stripe│     │Carrier││
-│  │Zendesk│          │Custom│              │Invoic│     └──────┘│
-│  │ ...  │           │Portal│              └──────┘             │
-│  └──────┘           └──────┘                                    │
 └────────────────────────────────────────────────────────────────┘
 ```
 
-#### Page 2: System Detail
+#### Page 2: Agent Detail
 
-**Route:** `/workbench/systems/:id`
+**Route:** `/workbench/agents/:id`
 
-All information about a single system + its use cases.
+All information about a single agent + its use cases.
 
 **Layout — 3 sections:**
 
-##### Section A: System Info (top)
+**Header:**
 ```
 ┌────────────────────────────────────────────────────────────────┐
-│  SAP WMS                                          [Edit] [Delete]│
+│  ← Back                                                         │
+│  SAP WMS                    [Save] [Generate Agent Spec] [Delete]│
 │  Warehouse management — pick, pack, ship, inventory              │
-│  Owner: Logistics & Fulfillment     Category: logistics          │
-│                                                                   │
-│  API Access:                                                      │
-│  ┌──────────────────────────────────────────────────────────┐    │
-│  │  Type:     REST API                                       │    │
-│  │  Base URL: https://api.sapwms.example.com/v1             │    │
-│  │  Docs:     https://docs.sapwms.example.com  [Open ↗]    │    │
-│  │  Auth:     Bearer Token                                   │    │
-│  │  API Key:  ●●●●●●●●●●●●  [Change] [Test Connection]    │    │
-│  │                                                           │    │
-│  │  API Spec: ✅ OpenAPI 3.0 loaded (23 endpoints)          │    │
-│  │            [Re-upload] [Fetch from URL]                   │    │
-│  └──────────────────────────────────────────────────────────┘    │
 └──────────────────────────────────────────────────────────────────┘
 ```
 
-##### Section B: Use Cases (middle)
+Top actions: Save persists all config fields, Generate runs spec generation,
+Delete removes the agent. All always visible.
+
+##### Section A: API & Technology
+```
+┌────────────────────────────────────────────────────────────────┐
+│  API & Technology                                                │
+│                                                                   │
+│  API Configuration (read-only display + set key/spec/test)       │
+│  Technology Stack: [Python 3.11 ▼]   Framework: [FastAPI + ...]  │
+│  Deployment: [Docker ...]  Error Handling: [Retry once on 5xx...]│
+│  Auth Notes: [bearer — API key from env var]                     │
+└──────────────────────────────────────────────────────────────────┘
+```
+
+##### Section B: Behavior
+```
+┌────────────────────────────────────────────────────────────────┐
+│  Behavior                                                        │
+│                                                                   │
+│  Agent Name: [SAP WMS Agent                                 ]    │
+│  Agent Role & Persona: (auto-sized textarea, shows full text)    │
+│  Additional Context: (auto-sized textarea, shows full text)      │
+└──────────────────────────────────────────────────────────────────┘
+```
+
+Textareas auto-expand to show their full content (no scrolling).
+
+##### Section C: Interactions
+
+Split into two clear sub-sections — "asks" and "provides to":
+
+```
+┌────────────────────────────────────────────────────────────────┐
+│  Interactions                                                    │
+│                                                                   │
+│  This Agent Asks                                                 │
+│  ┌────────────────────────────────────────────────────────┐     │
+│  │ [SAP WMS Agent] asks [Payment Agent ▼] for:            │     │
+│  │ [x] initiate_refund  [ ] check_invoice                 │     │
+│  │                                            [Remove]    │     │
+│  └────────────────────────────────────────────────────────┘     │
+│  [+ Add]                                                         │
+│                                                                   │
+│  This Agent Provides Information To                              │
+│  ┌────────────────────────────────────────────────────────┐     │
+│  │ [SAP WMS Agent] provides to [Support Orch. ▼] for:    │     │
+│  │ [x] ask_logistics  [x] track_package                   │     │
+│  │                                            [Remove]    │     │
+│  └────────────────────────────────────────────────────────┘     │
+│  [+ Add]                                                         │
+└──────────────────────────────────────────────────────────────────┘
+```
+
+Agent dropdowns exclude the current agent and agents already selected
+in the same sub-section.
+
+##### Section D: Use Cases
 ```
 ┌────────────────────────────────────────────────────────────────┐
 │  Use Cases (8)                                   [+ Add Use Case]│
-│                                                                   │
-│  ┌────────────────────────────────────────────────────────┐      │
-│  │ UC-001  Track package location               HIGH  READ│      │
-│  │ "Customer asks where their package is"                  │      │
-│  │ Status: ✅ Tested (3 successful runs)                   │      │
-│  │                                        [Open] [Test]   │      │
-│  └────────────────────────────────────────────────────────┘      │
-│  ┌────────────────────────────────────────────────────────┐      │
-│  │ UC-002  Check warehouse pack status           MED  READ│      │
-│  │ "Has the order been picked and packed?"                 │      │
-│  │ Status: 🔍 Discovered (endpoints mapped)                │      │
-│  │                                        [Open] [Test]   │      │
-│  └────────────────────────────────────────────────────────┘      │
-│  ...                                                              │
-└──────────────────────────────────────────────────────────────────┘
-```
-
-##### Section C: Generated Agent Spec (bottom, when ready)
-```
-┌────────────────────────────────────────────────────────────────┐
-│  Agent Spec                               [Generate] [Download] │
-│                                                                  │
-│  ⚠️  3 of 8 use cases not yet tested. Generate anyway?          │
-│                                                                  │
-│  Preview:                                                        │
-│  ┌──────────────────────────────────────────────────────────┐   │
-│  │  # Logistics Agent Specification                          │   │
-│  │  ## Tools (5)                                             │   │
-│  │  - track_package_status (UC-001, UC-002)                  │   │
-│  │  ...                                                      │   │
-│  └──────────────────────────────────────────────────────────┘   │
+│  (same as before — card list with priority/status/actions)       │
 └──────────────────────────────────────────────────────────────────┘
 ```
 
 #### Page 3: Use Case Detail + Agent Playground
 
-**Route:** `/workbench/systems/:id/usecases/:ucId`
+**Route:** `/workbench/agents/:id/usecases/:ucId`
 
 This is where the magic happens — self-discovery and live testing.
 
@@ -708,7 +669,7 @@ This is where the magic happens — self-discovery and live testing.
 
 #### Page 4: Agent Spec Review + Export
 
-**Route:** `/workbench/agents/:id`
+**Route:** `/workbench/specs/:id`
 
 Review generated agent spec, edit, set cross-agent dependencies, export.
 
@@ -738,16 +699,62 @@ Review generated agent spec, edit, set cross-agent dependencies, export.
 └──────────────────────────────────────────────────────────────────┘
 ```
 
+#### Page 5: Agent Architecture Map
+
+**Route:** `/workbench/map`
+
+A visual, read-only map showing all generated agents, the tools (skills) each
+agent exposes, the APIs they connect to, and how agents call each other.
+The goal is a high-level "at a glance" view so a human can understand the full
+agent architecture without reading individual specs.
+
+```
+┌────────────────────────────────────────────────────────────────┐
+│  Agent Architecture Map                                         │
+│                                                                  │
+│  ┌──────────────────┐        ┌──────────────────┐              │
+│  │ Logistics Agent   │───────►│ Support Orch.    │              │
+│  │                   │        │                   │              │
+│  │ Tools:            │        │ Tools:            │              │
+│  │ • track_package   │        │ • ask_logistics   │              │
+│  │ • check_inventory │        │ • ask_payment     │              │
+│  │                   │        │                   │              │
+│  │ Systems:          │        └──────────┬───────┘              │
+│  │ • SAP WMS         │                   │                      │
+│  │ • Carrier API     │        ┌──────────▼───────┐              │
+│  └──────────────────┘        │ Payment Agent     │              │
+│                               │                   │              │
+│                               │ Tools:            │              │
+│                               │ • initiate_refund │              │
+│                               │                   │              │
+│                               │ Systems:          │              │
+│                               │ • Stripe          │              │
+│                               └──────────────────┘              │
+│                                                                  │
+│  Click any agent card to open its spec detail page.             │
+└────────────────────────────────────────────────────────────────┘
+```
+
+**Data sources:**
+- Agent list + tools from `GET /workbench/specs`
+- Agent names from `GET /workbench/agents`
+- Connections from `depends_on` / `called_by` fields on each agent spec
+
+**Layout:** SVG canvas with agent cards as nodes, arrows showing call direction,
+tool names listed inside each card, linked system names below tools.
+
+---
+
 ### Frontend Routes
 
 ```
-/workbench                              Dashboard + migration map
-/workbench/systems/new                  Add new system form
-/workbench/systems/:id                  System detail + use cases
-/workbench/systems/:id/usecases/new     Add use case form
-/workbench/systems/:id/usecases/:ucId   Use case detail + playground
-/workbench/agents                       List generated agent specs
-/workbench/agents/:id                   Agent spec review + export
+/                                       Customer support demo (chat + trace)
+/workbench                              Dashboard + agent list
+/workbench/agents/:id                   Agent detail + use cases
+/workbench/agents/:id/usecases/:ucId    Use case detail + playground
+/workbench/specs                        List generated agent specs
+/workbench/specs/:id                    Agent spec review + export
+/workbench/map                          Visual agent architecture map
 ```
 
 ### Self-Discovery Engine
@@ -767,7 +774,7 @@ the backend:
 
 ```json
 {
-    "system_id": "uuid",
+    "agent_id": "uuid",
     "use_case": {
         "name": "Track package location",
         "trigger": "Customer asks where their package is",
@@ -815,7 +822,7 @@ the stored API key).
 
 ```json
 {
-    "system_id": "uuid",
+    "agent_id": "uuid",
     "use_case_id": "uuid",
     "test_input": {
         "order_id": "ORD-001"
@@ -854,7 +861,7 @@ the stored API key).
 
 ```json
 {
-    "system_ids": ["uuid1", "uuid2"],
+    "agent_ids": ["uuid1", "uuid2"],
     "agent_name": "Logistics Agent",
     "include_use_cases": ["uuid1", "uuid2", "uuid3"]
 }
@@ -862,25 +869,25 @@ the stored API key).
 
 Returns the same 4-file output as the existing generator (spec_md, tools_json,
 system_prompt, agent_py) but enriched with tested endpoint data and cross-agent
-dependency information.
+dependency information. (Note: `system_prompt` refers to the standard AI term.)
 
 ### Backend API Summary
 
-#### Systems CRUD
+#### Agents CRUD
 ```
-GET    /workbench/systems                    List all systems
-POST   /workbench/systems                    Create a system
-GET    /workbench/systems/:id                Get system detail
-PUT    /workbench/systems/:id                Update system
-DELETE /workbench/systems/:id                Delete system
-POST   /workbench/systems/:id/upload-spec    Upload OpenAPI spec
-POST   /workbench/systems/:id/test-connection  Test API connectivity
+GET    /workbench/agents                     List all agents
+POST   /workbench/agents                     Create an agent
+GET    /workbench/agents/:id                 Get agent detail
+PUT    /workbench/agents/:id                 Update agent
+DELETE /workbench/agents/:id                 Delete agent
+POST   /workbench/agents/:id/upload-spec     Upload OpenAPI spec
+POST   /workbench/agents/:id/test-connection Test API connectivity
 ```
 
 #### Use Cases CRUD
 ```
-GET    /workbench/systems/:id/usecases       List use cases for a system
-POST   /workbench/systems/:id/usecases       Create use case
+GET    /workbench/agents/:id/usecases        List use cases for an agent
+POST   /workbench/agents/:id/usecases        Create use case
 GET    /workbench/usecases/:id               Get use case detail
 PUT    /workbench/usecases/:id               Update use case
 DELETE /workbench/usecases/:id               Delete use case
@@ -894,7 +901,7 @@ POST   /workbench/test                       Run live test against real API
 
 #### Agent Specs
 ```
-POST   /workbench/generate-spec              Generate agent spec from systems + use cases
+POST   /workbench/generate-spec              Generate agent spec from agents + use cases
 GET    /workbench/specs                      List generated specs
 GET    /workbench/specs/:id                  Get spec detail
 PUT    /workbench/specs/:id                  Update spec (edit, set dependencies)
@@ -903,7 +910,7 @@ GET    /workbench/specs/:id/export           Download spec files as ZIP
 
 #### Dashboard
 ```
-GET    /workbench/dashboard                  Migration progress stats + system map data
+GET    /workbench/dashboard                  Migration progress stats + agent map data
 ```
 
 ---
@@ -922,7 +929,7 @@ HelloAgents/
 ├── docker-compose.yml           # MySQL 8.0 with seed data
 ├── db/
 │   ├── init.sql                 # Schema + seed data (MySQL syntax)
-│   └── workbench.sql            # Workbench tables (wb_systems, wb_use_cases, wb_agent_specs)
+│   └── workbench.sql            # Workbench tables (wb_agents, wb_use_cases, wb_agent_specs)
 ├── backend/
 │   ├── requirements.txt         # fastapi, uvicorn, anthropic, aiomysql, pydantic, python-dotenv
 │   ├── main.py                  # FastAPI app — POST /chat, GET /orders, loads .env
@@ -941,30 +948,35 @@ HelloAgents/
 │       ├── __init__.py
 │       ├── routes.py            # All /workbench/* FastAPI routes
 │       ├── models.py            # Pydantic models for request/response
-│       ├── db.py                # wb_systems, wb_use_cases, wb_agent_specs queries
+│       ├── db.py                # wb_agents, wb_use_cases, wb_agent_specs queries
 │       ├── discovery.py         # Self-discovery engine (Claude + API spec analysis)
 │       ├── tester.py            # Live API test executor (httpx calls)
 │       ├── spec_generator.py    # Agent spec generation (evolved from generator/)
 │       └── crypto.py            # API key encryption/decryption
 ├── frontend/
 │   ├── package.json
-│   ├── vite.config.js           # Proxies /chat, /orders to localhost:8000
+│   ├── tsconfig.json
+│   ├── vite.config.ts           # Tailwind plugin + proxies to localhost:8000
 │   ├── index.html
 │   └── src/
-│       ├── main.jsx
-│       ├── App.jsx              # Two-panel layout + routing for /workbench/*
-│       ├── App.css              # Full styling with depth-based indentation
-│       ├── Chat.jsx             # Chat panel with labeled example chips
-│       ├── Trace.jsx            # Trace timeline with hierarchy, stats, architecture diagram
+│       ├── main.tsx
+│       ├── index.css            # Tailwind imports + @theme (brand colors)
+│       ├── types.ts             # Shared TypeScript interfaces
+│       ├── App.tsx              # Routing for / and /workbench/*
+│       ├── DemoPage.tsx         # Customer support demo (chat + trace)
+│       ├── Chat.tsx             # Chat panel with labeled example chips
+│       ├── Trace.tsx            # Trace timeline with hierarchy, stats
+│       ├── components/
+│       │   └── WorkbenchLayout.tsx  # Sidebar + header shell for /workbench/*
 │       └── workbench/
-│           ├── Dashboard.jsx    # Migration map + progress
-│           ├── SystemForm.jsx   # Add/edit system
-│           ├── SystemDetail.jsx # System info + use case list
-│           ├── UseCaseForm.jsx  # Add/edit use case
-│           ├── Playground.jsx   # Use case detail + discovery + live test
-│           ├── AgentSpecList.jsx # List of generated specs
-│           ├── AgentSpecView.jsx # Spec review + export
-│           └── MigrationMap.jsx # Visual system-to-agent graph
+│           ├── api.ts           # Typed API client
+│           ├── queries.ts       # TanStack Query hooks
+│           ├── Dashboard.tsx    # Agent list + stats
+│           ├── AgentDetail.tsx  # Agent info + use case list
+│           ├── Playground.tsx   # Use case detail + discovery + live test
+│           ├── AgentSpecList.tsx # List of generated specs
+│           ├── AgentSpecView.tsx # Spec review + export
+│           └── AgentMap.tsx     # Visual agent architecture map
 └── generator/
     ├── requirements.txt         # anthropic, pyyaml
     ├── generate_agent_spec.py   # CLI tool: use cases YAML + OpenAPI → agent spec
@@ -999,14 +1011,14 @@ This is validated before storing.
 - Uses `httpx` async client with configurable timeouts
 - Each step is executed sequentially (output of step N feeds into step N+1)
 - All requests/responses are logged for the test results
-- Rate limiting: max 1 test per second per system to avoid overloading APIs
+- Rate limiting: max 1 test per second per agent to avoid overloading APIs
 - Sensitive data (API keys, auth tokens) is redacted from stored test results
 
 #### Spec Generation Enhancement
 The workbench generator improves on the standalone `generator/` by:
 - Using **tested endpoint data** (not just OpenAPI spec) — it knows which endpoints actually work
 - Including **real response examples** from test runs
-- Mapping **cross-agent dependencies** from the system map
+- Mapping **cross-agent dependencies** from the agent map
 - Generating **error handling** based on observed error responses during testing
 
 ### Database Tables
@@ -1029,7 +1041,7 @@ CREATE TABLE orders (
 );
 
 -- Agent Migration Workbench
-CREATE TABLE wb_systems (
+CREATE TABLE wb_agents (
     id              CHAR(36) PRIMARY KEY,
     name            VARCHAR(200) NOT NULL,
     description     TEXT,
@@ -1049,7 +1061,7 @@ CREATE TABLE wb_systems (
 
 CREATE TABLE wb_use_cases (
     id                  CHAR(36) PRIMARY KEY,
-    system_id           CHAR(36) NOT NULL REFERENCES wb_systems(id) ON DELETE CASCADE,
+    agent_id            CHAR(36) NOT NULL REFERENCES wb_agents(id) ON DELETE CASCADE,
     name                VARCHAR(200) NOT NULL,
     description         TEXT,
     trigger_text        TEXT,
@@ -1069,7 +1081,7 @@ CREATE TABLE wb_use_cases (
 CREATE TABLE wb_agent_specs (
     id              CHAR(36) PRIMARY KEY,
     name            VARCHAR(200) NOT NULL,
-    system_ids      JSON,               -- array of system UUIDs
+    agent_ids       JSON,               -- array of agent UUIDs
     use_case_ids    JSON,               -- array of use case UUIDs
     spec_markdown   LONGTEXT,
     tools_json      JSON,
@@ -1139,9 +1151,9 @@ python generate_agent_spec.py examples/logistics_usecases.yaml -o output/
 
 ### Phase 1 — Foundation
 1. Database tables + migration
-2. Systems CRUD (backend routes + frontend forms)
+2. Agents CRUD (backend routes + frontend forms)
 3. Use Cases CRUD
-4. Basic dashboard with system list
+4. Basic dashboard with agent list
 
 ### Phase 2 — Discovery
 5. API spec upload + parsing
@@ -1162,7 +1174,7 @@ python generate_agent_spec.py examples/logistics_usecases.yaml -o output/
 ### Phase 5 — Polish
 15. Migration map visualization (graph/diagram)
 16. Progress tracking + dashboard stats
-17. Bulk import (CSV/YAML for systems + use cases)
+17. Bulk import (CSV/YAML for agents + use cases)
 
 ---
 

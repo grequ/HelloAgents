@@ -1,0 +1,22 @@
+@import "tailwindcss";
+
+@theme {
+  --color-tedee-cyan: #34CFFD;
+  --color-tedee-navy: #22345A;
+  --color-tedee-gray: #A9A9A9;
+  --color-hover-cyan: #2bb8e0;
+  --color-bg-light: #f8fafc;
+  --color-text-primary: #1e293b;
+  --font-sans: "Inter", system-ui, -apple-system, sans-serif;
+}
+
+@keyframes fadeSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}

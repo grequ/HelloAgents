@@ -14,15 +14,21 @@ from pydantic import BaseModel
 import db
 from agents import support
 from workbench.routes import router as workbench_router
+from workbench import wb_db
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # Run schema migrations (idempotent — safe to run every startup)
+    try:
+        await wb_db.ensure_schema()
+    except Exception as e:
+        print(f"[warn] Schema migration skipped: {e}")
     yield
     await db.close_pool()
 
 
-app = FastAPI(title="HelloAgents", lifespan=lifespan)
+app = FastAPI(title="AgentForge", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
