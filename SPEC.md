@@ -58,44 +58,11 @@ multi-agent AI systems:
 
 ### Component Patterns
 
-#### Status/Severity Cards (used for AI findings, alerts, data quality)
-
-| Level   | Style                                                        |
-|---------|--------------------------------------------------------------|
-| ERROR   | `border-l-4 border-red-500, bg-red-50, text-red-800`        |
-| WARNING | `border-l-4 border-amber-500, bg-amber-50, text-amber-800`  |
-| INFO    | `border-l-4 border-blue-500, bg-blue-50, text-blue-800`     |
-
 #### Buttons
 
 - **Primary:** `bg-[#34CFFD] text-[#22345A] font-semibold rounded-lg hover:bg-[#2bb8e0]`
 - **Secondary/ghost:** `text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg`
 - **Danger:** `bg-red-500 text-white hover:bg-red-600 rounded-lg`
-
-#### Data Grids
-
-- AG Grid with `.ag-theme-alpine` base, custom overrides for brand colors
-- Spreadsheet-style editing with inline dropdowns, date pickers, number inputs
-- Color-coded cells for validation (green = OK, yellow = warning, red = error)
-
-#### Role Badge Colors
-
-| Role    | Color            |
-|---------|------------------|
-| Admin   | red              |
-| Editor  | cyan (`#34CFFD`) |
-| Visitor | gray             |
-
-### AI Assistant Pattern
-
-- **Name:** "Goldy" — subtitle adapted to domain (e.g. "Migration Assistant")
-- **Side panel:** 384px wide, slides in from right
-- **Identity line:** "I'm Goldy, your virtual migration guide."
-- **User messages:** `bg-[#34CFFD]/10` (light cyan background)
-- **Assistant messages:** white background, parsed for structured findings
-- **Loading state:** pulsing cyan dot + "[Name] is reviewing..."
-- **Default prompts:** 3 contextual suggestions shown on empty state
-- **Output protocol:** structured line-prefix format (`SUMMARY:`, `ERROR:`, `WARNING:`, `INFO:`, `LINK:`, `OPTIONS:`, `PASSED:`) parsed into styled cards
 
 ### Design Principles
 
@@ -103,23 +70,20 @@ multi-agent AI systems:
 - **Real-time validation:** Data issues flagged immediately, not after the fact
 - **No duplication:** Reference data maintained once, referenced everywhere
 - **Role-based visibility:** Sensitive data hidden from unauthorized roles
-- **Spreadsheet-familiar:** AG Grid for data-heavy views — users coming from Excel feel at home
 - **Card-based dashboard:** Summary metrics at the top, detail cards below, alerts inline
 
 ---
 
 ## Tech Stack
 
-| Layer      | Technology                    |
-|------------|-------------------------------|
-| Frontend   | React 19 + TypeScript         |
-| Styling    | Tailwind CSS v4               |
-| Data grids | AG Grid                       |
-| State      | TanStack Query (React Query)  |
-| Backend    | Python + FastAPI              |
-| ORM        | SQLAlchemy 2.0                |
-| Database   | MySQL 8 (Docker)              |
-| AI         | Claude API with tool-use loop |
+| Layer    | Technology                    |
+|----------|-------------------------------|
+| Frontend | React 19 + TypeScript         |
+| Styling  | Tailwind CSS v4               |
+| State    | TanStack Query (React Query)  |
+| Backend  | Python + FastAPI              |
+| Database | MySQL 8 (Docker) via aiomysql |
+| AI       | Claude API with tool-use loop |
 
 ---
 
@@ -538,34 +502,16 @@ The landing page showing the overall migration status.
 │  Agent Migration Workbench                                      │
 ├────────────────────────────────────────────────────────────────┤
 │                                                                 │
-│  Progress:  ████████░░░░░░░░  12/30 systems documented          │
-│             ████░░░░░░░░░░░░   8/30 use cases tested            │
-│             ██░░░░░░░░░░░░░░   3/30 specs generated             │
+│  Stats:  Systems: 12    Use Cases: 30    Agent Specs: 3         │
 │                                                                 │
-│  ┌─────────────────────────────────────────────────────────┐   │
-│  │  SYSTEM MAP (visual grid or graph)                       │   │
-│  │                                                          │   │
-│  │  [SAP WMS]──────[Logistics Agent]──────[Support Orch.]   │   │
-│  │  [Carrier API]──┘                      │                 │   │
-│  │  [Customs]──────┘                      │                 │   │
-│  │                                        │                 │   │
-│  │  [Stripe]───────[Payment Agent]────────┘                 │   │
-│  │  [Invoice DB]───┘                                        │   │
-│  │                                                          │   │
-│  │  [CRM]──────────[Customer Agent]  (not yet connected)    │   │
-│  │  [Zendesk]──────┘                                        │   │
-│  │                                                          │   │
-│  └─────────────────────────────────────────────────────────┘   │
-│                                                                 │
-│  Systems by Status:                                             │
 │  [+ Add System]                                                 │
 │                                                                 │
-│  Inventoried (5)    API Documented (3)    Tested (2)    Done (1)│
-│  ┌──────┐           ┌──────┐              ┌──────┐     ┌──────┐│
-│  │ CRM  │           │ WMS  │              │Stripe│     │Carrier││
-│  │Zendesk│          │Custom│              │Invoic│     └──────┘│
-│  │ ...  │           │Portal│              └──────┘             │
-│  └──────┘           └──────┘                                    │
+│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐       │
+│  │ SAP WMS  │  │ Carrier  │  │ Stripe   │  │ CRM      │       │
+│  │ logistics│  │ logistics│  │ finance  │  │ crm      │       │
+│  │ tested   │  │ documented│ │ inventoried│ │ inventoried│     │
+│  └──────────┘  └──────────┘  └──────────┘  └──────────┘       │
+│                                                                 │
 └────────────────────────────────────────────────────────────────┘
 ```
 
@@ -741,10 +687,9 @@ Review generated agent spec, edit, set cross-agent dependencies, export.
 ### Frontend Routes
 
 ```
-/workbench                              Dashboard + migration map
-/workbench/systems/new                  Add new system form
+/                                       Customer support demo (chat + trace)
+/workbench                              Dashboard + system list
 /workbench/systems/:id                  System detail + use cases
-/workbench/systems/:id/usecases/new     Add use case form
 /workbench/systems/:id/usecases/:ucId   Use case detail + playground
 /workbench/agents                       List generated agent specs
 /workbench/agents/:id                   Agent spec review + export
@@ -948,23 +893,27 @@ HelloAgents/
 │       └── crypto.py            # API key encryption/decryption
 ├── frontend/
 │   ├── package.json
-│   ├── vite.config.js           # Proxies /chat, /orders to localhost:8000
+│   ├── tsconfig.json
+│   ├── vite.config.ts           # Tailwind plugin + proxies to localhost:8000
 │   ├── index.html
 │   └── src/
-│       ├── main.jsx
-│       ├── App.jsx              # Two-panel layout + routing for /workbench/*
-│       ├── App.css              # Full styling with depth-based indentation
-│       ├── Chat.jsx             # Chat panel with labeled example chips
-│       ├── Trace.jsx            # Trace timeline with hierarchy, stats, architecture diagram
+│       ├── main.tsx
+│       ├── index.css            # Tailwind imports + @theme (brand colors)
+│       ├── types.ts             # Shared TypeScript interfaces
+│       ├── App.tsx              # Routing for / and /workbench/*
+│       ├── DemoPage.tsx         # Customer support demo (chat + trace)
+│       ├── Chat.tsx             # Chat panel with labeled example chips
+│       ├── Trace.tsx            # Trace timeline with hierarchy, stats
+│       ├── components/
+│       │   └── WorkbenchLayout.tsx  # Sidebar + header shell for /workbench/*
 │       └── workbench/
-│           ├── Dashboard.jsx    # Migration map + progress
-│           ├── SystemForm.jsx   # Add/edit system
-│           ├── SystemDetail.jsx # System info + use case list
-│           ├── UseCaseForm.jsx  # Add/edit use case
-│           ├── Playground.jsx   # Use case detail + discovery + live test
-│           ├── AgentSpecList.jsx # List of generated specs
-│           ├── AgentSpecView.jsx # Spec review + export
-│           └── MigrationMap.jsx # Visual system-to-agent graph
+│           ├── api.ts           # Typed API client
+│           ├── queries.ts       # TanStack Query hooks
+│           ├── Dashboard.tsx    # System list + stats
+│           ├── SystemDetail.tsx # System info + use case list
+│           ├── Playground.tsx   # Use case detail + discovery + live test
+│           ├── AgentSpecList.tsx # List of generated specs
+│           └── AgentSpecView.tsx # Spec review + export
 └── generator/
     ├── requirements.txt         # anthropic, pyyaml
     ├── generate_agent_spec.py   # CLI tool: use cases YAML + OpenAPI → agent spec
