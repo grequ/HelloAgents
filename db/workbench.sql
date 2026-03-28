@@ -53,3 +53,13 @@ CREATE TABLE IF NOT EXISTS wb_agent_specs (
     status          VARCHAR(20) DEFAULT 'draft',
     generated_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+
+CREATE TABLE IF NOT EXISTS wb_agent_interactions (
+    id              CHAR(36) PRIMARY KEY,
+    from_system_id  CHAR(36) NOT NULL,
+    to_system_id    CHAR(36) NOT NULL,
+    use_case_ids    JSON,
+    created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (from_system_id) REFERENCES wb_systems(id) ON DELETE CASCADE,
+    FOREIGN KEY (to_system_id) REFERENCES wb_systems(id) ON DELETE CASCADE
+);

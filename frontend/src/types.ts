@@ -21,12 +21,6 @@ export interface System {
   updated_at?: string;
 }
 
-export interface AgentConfigLink {
-  systemId: string;
-  systemName: string;
-  useCaseIds: string[];
-}
-
 export interface AgentConfig {
   agent_name: string;
   tech_stack: string;
@@ -36,8 +30,27 @@ export interface AgentConfig {
   error_handling: string;
   auth_notes: string;
   additional_context: string;
-  asks_agents: AgentConfigLink[];
-  provides_to_agents: AgentConfigLink[];
+}
+
+// --- Interactions (relational, stored in wb_agent_interactions) ---
+
+export interface InteractionAsk {
+  id?: string;
+  target_system_id: string;
+  target_system_name: string;
+  use_case_ids: string[];
+}
+
+export interface InteractionProvides {
+  id?: string;
+  source_system_id: string;
+  source_system_name: string;
+  use_case_ids: string[];
+}
+
+export interface Interactions {
+  asks: InteractionAsk[];
+  provides_to: InteractionProvides[];
 }
 
 export interface SystemCreate {

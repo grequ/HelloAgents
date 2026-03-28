@@ -9,6 +9,7 @@ import type {
   TestResult,
   ConnectionResult,
   SpecConfig,
+  Interactions,
 } from "../types";
 
 const BASE = "/workbench";
@@ -69,6 +70,21 @@ export async function uploadSystemSpecJson(id: string, spec: unknown): Promise<v
 
 export async function testSystemConnection(id: string): Promise<ConnectionResult> {
   return request<ConnectionResult>("POST", `/systems/${id}/test-connection`);
+}
+
+// Interactions (relational)
+export async function getInteractions(systemId: string): Promise<Interactions> {
+  return request<Interactions>("GET", `/systems/${systemId}/interactions`);
+}
+
+export async function saveInteractions(
+  systemId: string,
+  data: {
+    asks: { target_system_id: string; use_case_ids: string[] }[];
+    provides_to: { source_system_id: string; use_case_ids: string[] }[];
+  },
+): Promise<Interactions> {
+  return request<Interactions>("PUT", `/systems/${systemId}/interactions`, data);
 }
 
 // Use cases (nested under system)

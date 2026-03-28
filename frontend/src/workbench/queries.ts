@@ -8,6 +8,9 @@ import type {
   AgentConfig,
 } from "../types";
 
+// Re-export key type
+export type { AgentConfig };
+
 // --- Query Keys ---
 
 export const keys = {
@@ -16,6 +19,7 @@ export const keys = {
   system: (id: string) => ["system", id] as const,
   useCases: (systemId: string) => ["useCases", systemId] as const,
   useCase: (id: string) => ["useCase", id] as const,
+  interactions: (systemId: string) => ["interactions", systemId] as const,
   specs: ["specs"] as const,
   spec: (id: string) => ["spec", id] as const,
 };
@@ -54,6 +58,14 @@ export function useUseCase(id: string) {
   });
 }
 
+export function useInteractions(systemId: string) {
+  return useQuery({
+    queryKey: keys.interactions(systemId),
+    queryFn: () => api.getInteractions(systemId),
+    enabled: !!systemId,
+  });
+}
+
 export function useSpecs() {
   return useQuery({ queryKey: keys.specs, queryFn: api.listSpecs });
 }
@@ -86,6 +98,25 @@ export function useSaveAgentConfig() {
       api.updateSystem(id, { agent_config: config }),
     onSuccess: (_data, vars) => {
       qc.invalidateQueries({ queryKey: keys.system(vars.id) });
+    },
+  });
+}
+
+export function useSaveInteractions() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      systemId,
+      asks,
+      provides_to,
+    }: {
+      systemId: string;
+      asks: { target_system_id: string; use_case_ids: string[] }[];
+      provides_to: { source_system_id: string; use_case_ids: string[] }[];
+    }) => api.saveInteractions(systemId, { asks, provides_to }),
+    onSuccess: (_data, vars) => {
+      // Invalidate interactions for ALL systems since cross-system references changed
+      qc.invalidateQueries({ queryKey: ["interactions"] });
     },
   });
 }

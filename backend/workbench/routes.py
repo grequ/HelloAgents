@@ -69,6 +69,19 @@ async def delete_system(system_id: str):
     return {"ok": True}
 
 
+@router.get("/systems/{system_id}/interactions")
+async def get_interactions(system_id: str):
+    return await wb_db.get_interactions(system_id)
+
+
+@router.put("/systems/{system_id}/interactions")
+async def save_interactions(system_id: str, body: dict):
+    asks = body.get("asks", [])
+    provides_to = body.get("provides_to", [])
+    await wb_db.save_interactions(system_id, asks, provides_to)
+    return await wb_db.get_interactions(system_id)
+
+
 @router.post("/systems/{system_id}/api-key")
 async def set_api_key(system_id: str, body: dict):
     key = body.get("api_key", "")

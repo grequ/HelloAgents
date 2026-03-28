@@ -308,6 +308,60 @@ async def delete_spec(spec_id: str):
             await cur.execute("DELETE FROM wb_agent_specs WHERE id = %s", (spec_id,))
 
 
+# ---- Agent Interactions ----
+
+async def get_interactions(system_id: str) -> dict:
+    """Return asks (from=system_id) and provides_to (to=system_id) with system names."""
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        async with conn.cursor(dict_cursor()) as cur:
+            # Outgoing: this system calls others
+            await cur.execute(
+                """SELECT i.id, i.to_system_id as target_system_id, s.name as target_system_name, i.use_case_ids
+                   FROM wb_agent_interactions i
+                   JOIN wb_systems s ON s.id = i.to_system_id
+                   WHERE i.from_system_id = %s""", (system_id,))
+            asks = await cur.fetchall()
+            # Incoming: others call this system
+            await cur.execute(
+                """SELECT i.id, i.from_system_id as source_system_id, s.name as source_system_name, i.use_case_ids
+                   FROM wb_agent_interactions i
+                   JOIN wb_systems s ON s.id = i.from_system_id
+                   WHERE i.to_system_id = %s""", (system_id,))
+            provides_to = await cur.fetchall()
+    for row in asks:
+        row["use_case_ids"] = _parse_json_field(row.get("use_case_ids")) or []
+    for row in provides_to:
+        row["use_case_ids"] = _parse_json_field(row.get("use_case_ids")) or []
+    return {"asks": asks, "provides_to": provides_to}
+
+
+async def save_interactions(system_id: str, asks: list[dict], provides_to: list[dict]):
+    """Replace all interactions for a system.
+    asks: [{target_system_id, use_case_ids}]  — this system calls target
+    provides_to: [{source_system_id, use_case_ids}]  — source calls this system
+    """
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        async with conn.cursor() as cur:
+            # Delete outgoing
+            await cur.execute("DELETE FROM wb_agent_interactions WHERE from_system_id = %s", (system_id,))
+            # Delete incoming
+            await cur.execute("DELETE FROM wb_agent_interactions WHERE to_system_id = %s", (system_id,))
+            # Insert outgoing (asks)
+            for a in asks:
+                iid = _new_id()
+                await cur.execute(
+                    "INSERT INTO wb_agent_interactions (id, from_system_id, to_system_id, use_case_ids) VALUES (%s, %s, %s, %s)",
+                    (iid, system_id, a["target_system_id"], json.dumps(a.get("use_case_ids", []))))
+            # Insert incoming (provides_to)
+            for p in provides_to:
+                iid = _new_id()
+                await cur.execute(
+                    "INSERT INTO wb_agent_interactions (id, from_system_id, to_system_id, use_case_ids) VALUES (%s, %s, %s, %s)",
+                    (iid, p["source_system_id"], system_id, json.dumps(p.get("use_case_ids", []))))
+
+
 # ---- Dashboard ----
 
 async def get_dashboard_stats() -> dict:
