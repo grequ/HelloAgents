@@ -11,6 +11,7 @@ export interface System {
   api_docs_url?: string;
   api_auth_type?: string;
   api_auth_config?: Record<string, unknown>;
+  agent_config?: AgentConfig | null;
   has_api_key: boolean;
   has_api_spec: boolean;
   api_spec_endpoint_count?: number;
@@ -18,6 +19,25 @@ export interface System {
   use_case_count?: number;
   created_at?: string;
   updated_at?: string;
+}
+
+export interface AgentConfigLink {
+  systemId: string;
+  systemName: string;
+  useCaseIds: string[];
+}
+
+export interface AgentConfig {
+  agent_name: string;
+  tech_stack: string;
+  framework: string;
+  agent_role: string;
+  deployment: string;
+  error_handling: string;
+  auth_notes: string;
+  additional_context: string;
+  asks_agents: AgentConfigLink[];
+  provides_to_agents: AgentConfigLink[];
 }
 
 export interface SystemCreate {

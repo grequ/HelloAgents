@@ -31,6 +31,7 @@ def _row_to_system(row: dict) -> dict:
             endpoint_count += len([m for m in path_methods if m in ("get", "post", "put", "patch", "delete")])
     row["api_spec_endpoint_count"] = endpoint_count
     row["api_auth_config"] = _parse_json_field(row.get("api_auth_config"))
+    row["agent_config"] = _parse_json_field(row.get("agent_config"))
     return row
 
 
@@ -99,6 +100,8 @@ async def update_system(system_id: str, data: dict) -> dict | None:
     fields = {k: v for k, v in data.items() if v is not None}
     if "api_auth_config" in fields and isinstance(fields["api_auth_config"], dict):
         fields["api_auth_config"] = json.dumps(fields["api_auth_config"])
+    if "agent_config" in fields and isinstance(fields["agent_config"], dict):
+        fields["agent_config"] = json.dumps(fields["agent_config"])
     if not fields:
         return await get_system(system_id)
     sets = ", ".join(f"{k} = %s" for k in fields)

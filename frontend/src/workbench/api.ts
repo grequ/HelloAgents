@@ -51,7 +51,7 @@ export async function getSystem(id: string): Promise<System> {
   return request<System>("GET", `/systems/${id}`);
 }
 
-export async function updateSystem(id: string, data: Partial<SystemCreate>): Promise<System> {
+export async function updateSystem(id: string, data: Record<string, unknown>): Promise<System> {
   return request<System>("PUT", `/systems/${id}`, data);
 }
 

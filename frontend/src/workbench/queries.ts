@@ -5,6 +5,7 @@ import type {
   UseCaseCreate,
   SpecConfig,
   AgentSpec,
+  AgentConfig,
 } from "../types";
 
 // --- Query Keys ---
@@ -74,6 +75,17 @@ export function useCreateSystem() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: keys.dashboard });
       qc.invalidateQueries({ queryKey: keys.systems });
+    },
+  });
+}
+
+export function useSaveAgentConfig() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, config }: { id: string; config: AgentConfig }) =>
+      api.updateSystem(id, { agent_config: config }),
+    onSuccess: (_data, vars) => {
+      qc.invalidateQueries({ queryKey: keys.system(vars.id) });
     },
   });
 }

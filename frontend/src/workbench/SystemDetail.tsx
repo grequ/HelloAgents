@@ -1,20 +1,13 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
-import type { UseCaseCreate, UseCase, System, SpecConfig } from "../types";
+import type { UseCaseCreate, UseCase, System, SpecConfig, AgentConfig, AgentConfigLink } from "../types";
 import {
   useSystem, useSystems, useUseCases,
   useCreateUseCase, useDeleteUseCase, useDeleteSystem,
   useSetApiKey, useUploadSpec, useTestConnection, useGenerateSpec,
+  useSaveAgentConfig,
 } from "./queries";
 import { listUseCases } from "./api";
-
-// --- Interaction types ---
-
-interface AgentLink {
-  systemId: string;
-  systemName: string;
-  useCaseIds: string[];
-}
 
 const EMPTY_UC: UseCaseCreate = {
   name: "", description: "", trigger_text: "", user_input: "",
@@ -41,7 +34,7 @@ function AutoTextarea({ value, onChange, placeholder, className }: {
       ref={ref}
       className={className}
       value={value}
-      onChange={(e) => { onChange(e.target.value); }}
+      onChange={(e) => onChange(e.target.value)}
       onInput={resize}
       placeholder={placeholder}
       rows={1}
@@ -97,6 +90,17 @@ function generateRoleFromUseCases(sys: System, ucs: UseCase[]): string {
   return role;
 }
 
+// --- Shared button styles ---
+const btn = "inline-flex items-center justify-center rounded-lg text-sm font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed";
+const btnSizes = "px-4 py-2";
+const btnPrimary = `${btn} ${btnSizes} bg-tedee-cyan text-tedee-navy hover:bg-hover-cyan`;
+const btnSecondary = `${btn} ${btnSizes} border border-gray-200 text-gray-600 hover:bg-gray-50`;
+const btnDanger = `${btn} ${btnSizes} bg-red-500 text-white hover:bg-red-600`;
+const btnGhost = "inline-flex items-center justify-center rounded-md px-3 py-1.5 text-xs font-medium transition-colors";
+const btnGhostDefault = `${btnGhost} bg-gray-100 text-gray-700 hover:bg-gray-200`;
+const btnGhostDanger = `${btnGhost} text-red-600 hover:bg-red-50`;
+const inp = "w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-tedee-cyan focus:ring-1 focus:ring-tedee-cyan/20";
+
 // --- Component ---
 
 export default function SystemDetail() {
@@ -113,6 +117,7 @@ export default function SystemDetail() {
   const uploadSpec = useUploadSpec();
   const testConn = useTestConnection();
   const genSpec = useGenerateSpec();
+  const saveConfig = useSaveAgentConfig();
 
   const allSystems = allSystemsList.filter((s) => s.id !== id);
 
@@ -121,8 +126,9 @@ export default function SystemDetail() {
   const [ucForm, setUcForm] = useState<UseCaseCreate>({ ...EMPTY_UC });
   const [apiKeyInput, setApiKeyInput] = useState("");
   const [specInput, setSpecInput] = useState("");
+  const [saved, setSaved] = useState(false);
 
-  // Config — always visible, no toggle
+  // Config state
   const [genConfig, setGenConfig] = useState({
     agent_name: "",
     tech_stack: "Python 3.11",
@@ -133,11 +139,10 @@ export default function SystemDetail() {
     auth_notes: "",
     additional_context: "",
   });
-
-  // Interactions — two separate lists
-  const [asksAgents, setAsksAgents] = useState<AgentLink[]>([]);
-  const [providesToAgents, setProvidesToAgents] = useState<AgentLink[]>([]);
+  const [asksAgents, setAsksAgents] = useState<AgentConfigLink[]>([]);
+  const [providesToAgents, setProvidesToAgents] = useState<AgentConfigLink[]>([]);
   const [allUseCasesBySystem, setAllUseCasesBySystem] = useState<Record<string, UseCase[]>>({});
+  const [configLoaded, setConfigLoaded] = useState(false);
 
   // Load use cases for other systems
   useEffect(() => {
@@ -151,9 +156,27 @@ export default function SystemDetail() {
     if (allSystems.length > 0) loadOtherUcs();
   }, [allSystemsList.length]);
 
-  // Pre-fill config
+  // Load saved config from system.agent_config OR generate defaults
   useEffect(() => {
-    if (system && useCases.length > 0) {
+    if (!system || configLoaded) return;
+
+    const saved = system.agent_config;
+    if (saved) {
+      setGenConfig({
+        agent_name: saved.agent_name || system.name + " Agent",
+        tech_stack: saved.tech_stack || "Python 3.11",
+        framework: saved.framework || "FastAPI + anthropic SDK",
+        agent_role: saved.agent_role || "",
+        deployment: saved.deployment || "Standalone microservice (Docker)",
+        error_handling: saved.error_handling || "Retry once on 5xx, return graceful error message to user on failure",
+        auth_notes: saved.auth_notes || "",
+        additional_context: saved.additional_context || "",
+      });
+      setAsksAgents(saved.asks_agents || []);
+      setProvidesToAgents(saved.provides_to_agents || []);
+      setConfigLoaded(true);
+    } else if (useCases.length > 0) {
+      // Generate defaults
       setGenConfig((c) => ({
         ...c,
         agent_name: c.agent_name || system.name + " Agent",
@@ -161,10 +184,27 @@ export default function SystemDetail() {
         auth_notes: c.auth_notes || (system.api_auth_type && system.api_auth_type !== "none" ? `${system.api_auth_type} — API key from env var` : ""),
         additional_context: c.additional_context || generateAdditionalContext(system, useCases),
       }));
+      setConfigLoaded(true);
     }
-  }, [system, useCases]);
+  }, [system, useCases, configLoaded]);
+
+  // --- Build current config snapshot ---
+
+  function buildAgentConfig(): AgentConfig {
+    return {
+      ...genConfig,
+      asks_agents: asksAgents,
+      provides_to_agents: providesToAgents,
+    };
+  }
 
   // --- Handlers ---
+
+  const handleSave = async () => {
+    await saveConfig.mutateAsync({ id: id!, config: buildAgentConfig() });
+    setSaved(true);
+    setTimeout(() => setSaved(false), 2000);
+  };
 
   const handleCreateUc = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -181,26 +221,26 @@ export default function SystemDetail() {
     } catch { alert("Invalid JSON"); }
   };
 
-  const buildInteractionsText = (): string => {
-    const lines: string[] = [];
+  const handleGenerate = async () => {
+    // Save config first
+    await saveConfig.mutateAsync({ id: id!, config: buildAgentConfig() });
+
+    const interactionLines: string[] = [];
     for (const la of asksAgents) {
       const ucNames = la.useCaseIds.map((uid) => (allUseCasesBySystem[la.systemId] || []).find((u) => u.id === uid)?.name).filter(Boolean);
-      lines.push(`This agent calls: ${la.systemName} Agent` + (ucNames.length ? ` (use cases: ${ucNames.join(", ")})` : ""));
+      interactionLines.push(`This agent calls: ${la.systemName} Agent` + (ucNames.length ? ` (use cases: ${ucNames.join(", ")})` : ""));
     }
     for (const la of providesToAgents) {
       const ucNames = la.useCaseIds.map((uid) => (allUseCasesBySystem[la.systemId] || []).find((u) => u.id === uid)?.name).filter(Boolean);
-      lines.push(`This agent is called by: ${la.systemName} Agent` + (ucNames.length ? ` (use cases: ${ucNames.join(", ")})` : ""));
+      interactionLines.push(`This agent is called by: ${la.systemName} Agent` + (ucNames.length ? ` (use cases: ${ucNames.join(", ")})` : ""));
     }
-    return lines.join("\n");
-  };
 
-  const handleGenerate = async () => {
     const config: SpecConfig = {
       tech_stack: genConfig.tech_stack,
       framework: genConfig.framework,
       agent_role: genConfig.agent_role,
       deployment: genConfig.deployment,
-      interactions: buildInteractionsText(),
+      interactions: interactionLines.join("\n") || "",
       error_handling: genConfig.error_handling,
       auth_notes: genConfig.auth_notes,
       additional_context: genConfig.additional_context,
@@ -218,43 +258,26 @@ export default function SystemDetail() {
     }
   };
 
-  const handleSave = () => {
-    // Config is local state — "Save" is a UX confirmation. The real persist happens on Generate.
-    // For now we just show a brief confirmation.
-    alert("Configuration saved locally. Click 'Generate Agent Spec' to create the spec.");
-  };
-
   // --- Interaction helpers ---
 
-  function addAgentLink(list: AgentLink[], setList: React.Dispatch<React.SetStateAction<AgentLink[]>>, excludeIds: string[]) {
+  function addAgentLink(list: AgentConfigLink[], setList: React.Dispatch<React.SetStateAction<AgentConfigLink[]>>, excludeIds: string[]) {
     const available = allSystems.filter((s) => !excludeIds.includes(s.id));
     if (available.length === 0) return;
     setList([...list, { systemId: available[0].id, systemName: available[0].name, useCaseIds: [] }]);
   }
 
-  function updateAgentLink(list: AgentLink[], setList: React.Dispatch<React.SetStateAction<AgentLink[]>>, idx: number, systemId: string) {
+  function updateAgentLink(list: AgentConfigLink[], setList: React.Dispatch<React.SetStateAction<AgentConfigLink[]>>, idx: number, systemId: string) {
     const updated = [...list];
     updated[idx] = { systemId, systemName: allSystems.find((s) => s.id === systemId)?.name || "", useCaseIds: [] };
     setList(updated);
   }
 
-  function toggleUseCase(list: AgentLink[], setList: React.Dispatch<React.SetStateAction<AgentLink[]>>, idx: number, ucId: string) {
+  function toggleUseCase(list: AgentConfigLink[], setList: React.Dispatch<React.SetStateAction<AgentConfigLink[]>>, idx: number, ucId: string) {
     const updated = [...list];
     const ucs = updated[idx].useCaseIds;
     updated[idx] = { ...updated[idx], useCaseIds: ucs.includes(ucId) ? ucs.filter((x) => x !== ucId) : [...ucs, ucId] };
     setList(updated);
   }
-
-  function removeAgentLink(list: AgentLink[], setList: React.Dispatch<React.SetStateAction<AgentLink[]>>, idx: number) {
-    setList(list.filter((_, i) => i !== idx));
-  }
-
-  // Styles
-  const inp = "w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-tedee-cyan";
-  const btnPrimary = "px-4 py-2 rounded-lg bg-tedee-cyan text-tedee-navy font-semibold text-sm hover:bg-hover-cyan disabled:opacity-50 transition-colors";
-  const btnSecondary = "px-4 py-2 rounded-lg border border-gray-200 text-gray-600 text-sm hover:bg-gray-100 transition-colors";
-  const btnDanger = "px-4 py-2 rounded-lg bg-red-500 text-white font-semibold text-sm hover:bg-red-600 transition-colors";
-  const btnSm = "px-3 py-1.5 rounded-md text-xs font-medium";
 
   if (sysLoading || ucLoading) return <p className="text-sm text-gray-500">Loading...</p>;
   if (!system) return <p className="text-sm text-gray-500">System not found</p>;
@@ -263,38 +286,32 @@ export default function SystemDetail() {
   const asksExcludeIds = asksAgents.map((a) => a.systemId);
   const providesExcludeIds = providesToAgents.map((a) => a.systemId);
 
-  // Render an interaction sub-section
+  // --- Interaction sub-section renderer ---
+
   function renderInteractionList(
     title: string,
     directionLabel: string,
-    list: AgentLink[],
-    setList: React.Dispatch<React.SetStateAction<AgentLink[]>>,
+    list: AgentConfigLink[],
+    setList: React.Dispatch<React.SetStateAction<AgentConfigLink[]>>,
     excludeIds: string[],
   ) {
     const availableForAdd = allSystems.filter((s) => !excludeIds.includes(s.id));
-
     return (
       <div>
         <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">{title}</h4>
         {list.map((la, idx) => {
-          // Available options: current selection + those not used in this list
           const usedIds = list.filter((_, i) => i !== idx).map((a) => a.systemId);
           const options = allSystems.filter((s) => !usedIds.includes(s.id));
-
           return (
             <div key={idx} className="bg-gray-50 rounded-lg p-3 mb-2 border border-gray-200">
               <div className="flex items-center gap-2 mb-2 text-sm">
-                <span className="text-gray-500 font-medium whitespace-nowrap">{agentName}</span>
+                <span className="text-gray-600 font-medium whitespace-nowrap">{agentName}</span>
                 <span className="text-gray-400">{directionLabel}</span>
-                <select
-                  className={`${inp} w-auto flex-1`}
-                  value={la.systemId}
-                  onChange={(e) => updateAgentLink(list, setList, idx, e.target.value)}
-                >
+                <select className={`${inp} w-auto flex-1`} value={la.systemId} onChange={(e) => updateAgentLink(list, setList, idx, e.target.value)}>
                   {options.map((s) => <option key={s.id} value={s.id}>{s.name} Agent</option>)}
                 </select>
                 <span className="text-gray-400">for</span>
-                <button className={`${btnSm} text-red-600 hover:bg-red-50`} onClick={() => removeAgentLink(list, setList, idx)}>Remove</button>
+                <button className={btnGhostDanger} onClick={() => setList(list.filter((_, i) => i !== idx))}>Remove</button>
               </div>
               {(allUseCasesBySystem[la.systemId] || []).length > 0 && (
                 <div className="flex flex-wrap gap-1.5 ml-1">
@@ -310,21 +327,19 @@ export default function SystemDetail() {
           );
         })}
         {availableForAdd.length > 0 ? (
-          <button className={`${btnSm} bg-gray-100 text-gray-700 hover:bg-gray-200`} onClick={() => addAgentLink(list, setList, excludeIds)}>+ Add</button>
-        ) : list.length > 0 ? (
-          <p className="text-xs text-gray-400">All available agents linked.</p>
+          <button className={btnGhostDefault} onClick={() => addAgentLink(list, setList, excludeIds)}>+ Add</button>
         ) : allSystems.length === 0 ? (
           <p className="text-xs text-gray-400">Add more systems to link agents together.</p>
-        ) : (
-          <button className={`${btnSm} bg-gray-100 text-gray-700 hover:bg-gray-200`} onClick={() => addAgentLink(list, setList, excludeIds)}>+ Add</button>
-        )}
+        ) : list.length > 0 ? (
+          <p className="text-xs text-gray-400">All available agents linked.</p>
+        ) : null}
       </div>
     );
   }
 
   return (
     <div className="max-w-5xl mx-auto space-y-6">
-      {/* Header with top actions */}
+      {/* Header */}
       <div className="flex items-start justify-between">
         <div>
           <Link to="/workbench" className="text-xs text-tedee-cyan hover:underline">&larr; Back</Link>
@@ -333,12 +348,10 @@ export default function SystemDetail() {
         </div>
         <div className="flex items-center gap-2">
           <span className="text-[11px] px-2 py-0.5 rounded-full bg-gray-200 text-gray-700 font-medium">{system.status}</span>
-          <button className={btnSecondary} onClick={handleSave}>Save</button>
-          <button
-            className={btnPrimary}
-            onClick={handleGenerate}
-            disabled={genSpec.isPending || useCases.length === 0}
-          >
+          <button className={btnSecondary} onClick={handleSave} disabled={saveConfig.isPending}>
+            {saved ? "Saved!" : saveConfig.isPending ? "Saving..." : "Save"}
+          </button>
+          <button className={btnPrimary} onClick={handleGenerate} disabled={genSpec.isPending || useCases.length === 0}>
             {genSpec.isPending ? "Generating..." : "Generate Agent Spec"}
           </button>
           <button className={btnDanger} onClick={async () => { if (confirm("Delete this system and all its use cases?")) { await deleteSys.mutateAsync(id!); nav("/workbench"); } }}>
@@ -351,7 +364,6 @@ export default function SystemDetail() {
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
         <h3 className="font-semibold text-text-primary mb-3">API & Technology</h3>
 
-        {/* API info (read-only) */}
         <div className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm mb-4">
           <div><span className="text-gray-500">Type:</span> <span className="text-text-primary">{system.api_type}</span></div>
           <div><span className="text-gray-500">Base URL:</span> <span className="text-text-primary">{system.api_base_url || "Not set"}</span></div>
@@ -360,20 +372,17 @@ export default function SystemDetail() {
           <div className="col-span-2"><span className="text-gray-500">API Spec:</span> <span className="text-text-primary">{system.has_api_spec ? `Loaded (${system.api_spec_endpoint_count} endpoints)` : "Not uploaded"}</span></div>
         </div>
 
-        {/* API actions */}
         <div className="space-y-3 mb-5 pb-5 border-b border-gray-100">
           <div className="flex gap-2">
             <input type="password" className={`${inp} flex-1`} placeholder="API Key" value={apiKeyInput} onChange={(e) => setApiKeyInput(e.target.value)} />
-            <button className={`${btnSm} bg-gray-100 text-gray-700 hover:bg-gray-200`} onClick={async () => { if (apiKeyInput) { await setApiKey.mutateAsync({ id: id!, apiKey: apiKeyInput }); setApiKeyInput(""); } }}>
-              Set Key
-            </button>
+            <button className={btnGhostDefault} onClick={async () => { if (apiKeyInput) { await setApiKey.mutateAsync({ id: id!, apiKey: apiKeyInput }); setApiKeyInput(""); } }}>Set Key</button>
           </div>
           <div className="flex gap-2">
             <textarea className={`${inp} flex-1`} placeholder="Paste OpenAPI/Swagger JSON spec here..." rows={3} value={specInput} onChange={(e) => setSpecInput(e.target.value)} />
-            <button className={`${btnSm} bg-gray-100 text-gray-700 hover:bg-gray-200 self-start`} onClick={handleUploadSpec}>Upload Spec</button>
+            <button className={`${btnGhostDefault} self-start`} onClick={handleUploadSpec}>Upload Spec</button>
           </div>
           <div className="flex items-center gap-3">
-            <button className={`${btnSm} bg-gray-100 text-gray-700 hover:bg-gray-200`} onClick={() => testConn.mutate(id!)} disabled={testConn.isPending}>Test Connection</button>
+            <button className={btnGhostDefault} onClick={() => testConn.mutate(id!)} disabled={testConn.isPending}>Test Connection</button>
             {testConn.data && (
               <span className={`text-xs font-medium ${testConn.data.ok ? "text-green-600" : "text-red-600"}`}>
                 {testConn.data.ok ? `Connected (${testConn.data.status_code})` : `Failed: ${testConn.data.error}`}
@@ -382,31 +391,25 @@ export default function SystemDetail() {
           </div>
         </div>
 
-        {/* Technology fields */}
         <div className="grid grid-cols-2 gap-3 mb-3">
-          <div>
-            <label className="block text-xs text-gray-500 mb-1">Technology Stack</label>
+          <div><label className="block text-xs text-gray-500 mb-1">Technology Stack</label>
             <select className={inp} value={genConfig.tech_stack} onChange={(e) => setGenConfig({ ...genConfig, tech_stack: e.target.value })}>
               <option>Python 3.11</option><option>Python 3.12</option><option>Node.js / TypeScript</option>
             </select>
           </div>
-          <div>
-            <label className="block text-xs text-gray-500 mb-1">Framework</label>
+          <div><label className="block text-xs text-gray-500 mb-1">Framework</label>
             <input className={inp} value={genConfig.framework} onChange={(e) => setGenConfig({ ...genConfig, framework: e.target.value })} placeholder="e.g. FastAPI + anthropic SDK" />
           </div>
         </div>
         <div className="grid grid-cols-2 gap-3 mb-3">
-          <div>
-            <label className="block text-xs text-gray-500 mb-1">Deployment</label>
+          <div><label className="block text-xs text-gray-500 mb-1">Deployment</label>
             <input className={inp} value={genConfig.deployment} onChange={(e) => setGenConfig({ ...genConfig, deployment: e.target.value })} placeholder="e.g. Docker, AWS Lambda" />
           </div>
-          <div>
-            <label className="block text-xs text-gray-500 mb-1">Error Handling</label>
+          <div><label className="block text-xs text-gray-500 mb-1">Error Handling</label>
             <input className={inp} value={genConfig.error_handling} onChange={(e) => setGenConfig({ ...genConfig, error_handling: e.target.value })} />
           </div>
         </div>
-        <div>
-          <label className="block text-xs text-gray-500 mb-1">Authentication Notes</label>
+        <div><label className="block text-xs text-gray-500 mb-1">Authentication Notes</label>
           <input className={inp} value={genConfig.auth_notes} onChange={(e) => setGenConfig({ ...genConfig, auth_notes: e.target.value })} placeholder="e.g. bearer — API key from env var" />
         </div>
       </div>
@@ -432,20 +435,8 @@ export default function SystemDetail() {
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
         <h3 className="font-semibold text-text-primary mb-4">Interactions</h3>
         <div className="space-y-5">
-          {renderInteractionList(
-            "This Agent Asks",
-            "asks",
-            asksAgents,
-            setAsksAgents,
-            asksExcludeIds,
-          )}
-          {renderInteractionList(
-            "This Agent Provides Information To",
-            "provides to",
-            providesToAgents,
-            setProvidesToAgents,
-            providesExcludeIds,
-          )}
+          {renderInteractionList("This Agent Asks", "asks", asksAgents, setAsksAgents, asksExcludeIds)}
+          {renderInteractionList("This Agent Provides Information To", "provides to", providesToAgents, setProvidesToAgents, providesExcludeIds)}
         </div>
       </div>
 
@@ -484,25 +475,17 @@ export default function SystemDetail() {
           {useCases.map((uc) => (
             <div key={uc.id} className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
               <div className="flex items-center justify-between mb-1">
-                <Link to={`/workbench/systems/${id}/usecases/${uc.id}`} className="font-medium text-sm text-tedee-navy hover:underline">
-                  {uc.name}
-                </Link>
+                <Link to={`/workbench/systems/${id}/usecases/${uc.id}`} className="font-medium text-sm text-tedee-navy hover:underline">{uc.name}</Link>
                 <div className="flex gap-1.5">
-                  <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${uc.priority === "high" ? "bg-red-100 text-red-700" : uc.priority === "medium" ? "bg-amber-100 text-amber-700" : "bg-gray-100 text-gray-600"}`}>
-                    {uc.priority}
-                  </span>
+                  <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${uc.priority === "high" ? "bg-red-100 text-red-700" : uc.priority === "medium" ? "bg-amber-100 text-amber-700" : "bg-gray-100 text-gray-600"}`}>{uc.priority}</span>
                   {uc.is_write && <span className="text-[10px] px-1.5 py-0.5 rounded bg-orange-100 text-orange-700 font-medium">WRITE</span>}
                   <span className="text-[10px] px-1.5 py-0.5 rounded bg-gray-100 text-gray-600 font-medium">{uc.status}</span>
                 </div>
               </div>
               <p className="text-xs text-gray-500 mb-2">{uc.trigger_text || uc.description}</p>
               <div className="flex gap-2">
-                <Link to={`/workbench/systems/${id}/usecases/${uc.id}`} className={`${btnSm} bg-tedee-cyan/10 text-tedee-navy hover:bg-tedee-cyan/20`}>
-                  Open Playground
-                </Link>
-                <button className={`${btnSm} text-red-600 hover:bg-red-50`} onClick={async () => { if (confirm("Delete this use case?")) await deleteUc.mutateAsync(uc.id); }}>
-                  Delete
-                </button>
+                <Link to={`/workbench/systems/${id}/usecases/${uc.id}`} className={`${btnGhost} bg-tedee-cyan/10 text-tedee-navy hover:bg-tedee-cyan/20`}>Open Playground</Link>
+                <button className={btnGhostDanger} onClick={async () => { if (confirm("Delete this use case?")) await deleteUc.mutateAsync(uc.id); }}>Delete</button>
               </div>
             </div>
           ))}

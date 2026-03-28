@@ -13,6 +13,7 @@ CREATE TABLE IF NOT EXISTS wb_systems (
     api_key_enc     VARCHAR(500),
     api_auth_type   VARCHAR(30) DEFAULT 'bearer',
     api_auth_config JSON,
+    agent_config    JSON,
     status          VARCHAR(30) DEFAULT 'inventoried',
     created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
