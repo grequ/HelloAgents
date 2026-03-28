@@ -342,6 +342,23 @@ async def delete_spec(spec_id: str):
 
 # ---- Agent Interactions ----
 
+async def get_all_interactions() -> list[dict]:
+    """Return all interactions with system names."""
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        async with conn.cursor(dict_cursor()) as cur:
+            await cur.execute(
+                """SELECT i.id, i.from_system_id, sf.name as from_system_name,
+                          i.to_system_id, st.name as to_system_name, i.use_case_ids
+                   FROM wb_agent_interactions i
+                   JOIN wb_systems sf ON sf.id = i.from_system_id
+                   JOIN wb_systems st ON st.id = i.to_system_id""")
+            rows = await cur.fetchall()
+    for row in rows:
+        row["use_case_ids"] = _parse_json_field(row.get("use_case_ids")) or []
+    return rows
+
+
 async def get_interactions(system_id: str) -> dict:
     """Return asks (from=system_id) and provides_to (to=system_id) with system names."""
     pool = await get_pool()

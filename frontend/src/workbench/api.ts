@@ -73,6 +73,19 @@ export async function testSystemConnection(id: string): Promise<ConnectionResult
 }
 
 // Interactions (relational)
+export interface InteractionRow {
+  id: string;
+  from_system_id: string;
+  from_system_name: string;
+  to_system_id: string;
+  to_system_name: string;
+  use_case_ids: string[];
+}
+
+export async function getAllInteractions(): Promise<InteractionRow[]> {
+  return request<InteractionRow[]>("GET", "/interactions");
+}
+
 export async function getInteractions(systemId: string): Promise<Interactions> {
   return request<Interactions>("GET", `/systems/${systemId}/interactions`);
 }

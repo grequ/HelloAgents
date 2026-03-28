@@ -69,6 +69,11 @@ async def delete_system(system_id: str):
     return {"ok": True}
 
 
+@router.get("/interactions")
+async def get_all_interactions():
+    return await wb_db.get_all_interactions()
+
+
 @router.get("/systems/{system_id}/interactions")
 async def get_interactions(system_id: str):
     return await wb_db.get_interactions(system_id)

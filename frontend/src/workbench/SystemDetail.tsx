@@ -447,9 +447,9 @@ export default function SystemDetail() {
                     <span className="text-gray-400">for</span>
                     <button className={btnGhostDanger} onClick={() => setProvidesToAgents(providesToAgents.filter((_, i) => i !== idx))}>Remove</button>
                   </div>
-                  {(allUseCasesBySystem[la.source_system_id] || []).length > 0 && (
+                  {useCases.length > 0 && (
                     <div className="flex flex-wrap gap-1.5 ml-1">
-                      {(allUseCasesBySystem[la.source_system_id] || []).map((uc) => (
+                      {useCases.map((uc) => (
                         <label key={uc.id} className={`text-xs px-2 py-1 rounded border cursor-pointer transition-colors ${la.use_case_ids.includes(uc.id) ? "border-tedee-cyan bg-tedee-cyan/10 text-tedee-navy" : "border-gray-200 bg-white text-gray-500"}`}>
                           <input type="checkbox" className="hidden" checked={la.use_case_ids.includes(uc.id)} onChange={() => toggleProvidesUc(idx, uc.id)} />
                           {uc.name}

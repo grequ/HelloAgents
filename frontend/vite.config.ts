@@ -9,6 +9,7 @@ export default defineConfig({
     proxy: {
       "/chat": "http://localhost:8000",
       "/orders": "http://localhost:8000",
+      "/workbench/interactions": "http://localhost:8000",
       "/workbench/systems": "http://localhost:8000",
       "/workbench/usecases": "http://localhost:8000",
       "/workbench/discover": "http://localhost:8000",

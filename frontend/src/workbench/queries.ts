@@ -58,6 +58,13 @@ export function useUseCase(id: string) {
   });
 }
 
+export function useAllInteractions() {
+  return useQuery({
+    queryKey: ["interactions", "all"] as const,
+    queryFn: api.getAllInteractions,
+  });
+}
+
 export function useInteractions(systemId: string) {
   return useQuery({
     queryKey: keys.interactions(systemId),
