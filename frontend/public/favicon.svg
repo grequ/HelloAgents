@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <!-- Anvil base -->
+  <path d="M6 22h20v3c0 1-1 2-2 2H8c-1 0-2-1-2-2v-3z" fill="#22345A"/>
+  <!-- Anvil top -->
+  <path d="M4 19h24c1 0 1.5.5 1.5 1.5S29 22 28 22H4c-1 0-1.5-.5-1.5-1.5S3 19 4 19z" fill="#22345A"/>
+  <!-- Spark / agent node (cyan diamond) -->
+  <path d="M16 4l4 6-4 6-4-6z" fill="#34CFFD"/>
+  <!-- Connection lines from spark -->
+  <line x1="12" y1="10" x2="8" y2="17" stroke="#34CFFD" stroke-width="1.5" stroke-linecap="round"/>
+  <line x1="20" y1="10" x2="24" y2="17" stroke="#34CFFD" stroke-width="1.5" stroke-linecap="round"/>
+  <line x1="16" y1="16" x2="16" y2="19" stroke="#34CFFD" stroke-width="1.5" stroke-linecap="round"/>
+  <!-- Small agent dots -->
+  <circle cx="8" cy="17" r="2" fill="#34CFFD" opacity="0.7"/>
+  <circle cx="24" cy="17" r="2" fill="#34CFFD" opacity="0.7"/>
+</svg>
