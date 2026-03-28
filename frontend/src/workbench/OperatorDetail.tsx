@@ -7,6 +7,7 @@ import {
   useSetApiKey, useUploadSpec, useTestConnection, useGenerateSpec,
   useSaveAgentConfig,
 } from "./queries";
+import { generateSpecFromDocs } from "./api";
 import { btnPrimary, btnSecondary, btnDanger, btnGhost, btnGhostDanger, btnGhostCyan, inp } from "./ui";
 
 // --- Auto-sizing textarea ---
@@ -134,54 +135,63 @@ export default function OperatorDetail() {
     const input = specInput.trim();
     if (!input) return;
 
-    // Detect URL — try the URL directly, then common OpenAPI spec paths
-    if (input.startsWith("http://") || input.startsWith("https://")) {
+    const lines = input.split("\n").map((l) => l.trim()).filter(Boolean);
+    const urls = lines.filter((l) => l.startsWith("http://") || l.startsWith("https://"));
+
+    // Case 1: All lines are URLs → try direct fetch first, fallback to AI generation
+    if (urls.length > 0 && urls.length === lines.length) {
       setSpecLoading(true);
-      const baseUrl = input.replace(/\/+$/, "");
-      const urlsToTry = [
-        baseUrl,
-        // Common OpenAPI/Swagger spec locations
-        ...(baseUrl.endsWith(".json") || baseUrl.endsWith(".yaml") ? [] : [
-          `${baseUrl}/openapi.json`,
-          `${baseUrl}/swagger.json`,
-          `${baseUrl}/api-docs`,
-          `${baseUrl}/v1/openapi.json`,
-          `${baseUrl}/v2/swagger.json`,
-        ]),
-      ];
-      let found = false;
-      for (const url of urlsToTry) {
-        try {
-          const resp = await fetch(url);
-          if (!resp.ok) continue;
-          const contentType = resp.headers.get("content-type") || "";
-          if (!contentType.includes("json") && !contentType.includes("yaml")) continue;
-          const spec = await resp.json();
-          if (spec && (spec.openapi || spec.swagger || spec.paths)) {
-            await uploadSpec.mutateAsync({ id: id!, spec });
-            setSpecInput("");
-            found = true;
-            break;
-          }
-        } catch { /* try next */ }
+
+      // If single URL, try direct fetch + common paths first
+      if (urls.length === 1) {
+        const baseUrl = urls[0].replace(/\/+$/, "");
+        const urlsToTry = [
+          baseUrl,
+          ...(baseUrl.endsWith(".json") || baseUrl.endsWith(".yaml") ? [] : [
+            `${baseUrl}/openapi.json`, `${baseUrl}/swagger.json`, `${baseUrl}/api-docs`,
+          ]),
+        ];
+        for (const url of urlsToTry) {
+          try {
+            const resp = await fetch(url);
+            if (!resp.ok) continue;
+            const ct = resp.headers.get("content-type") || "";
+            if (!ct.includes("json")) continue;
+            const spec = await resp.json();
+            if (spec && (spec.openapi || spec.swagger || spec.paths)) {
+              await uploadSpec.mutateAsync({ id: id!, spec });
+              setSpecInput("");
+              setSpecLoading(false);
+              return;
+            }
+          } catch { /* try next */ }
+        }
       }
-      if (!found) {
-        alert(
-          "Could not find an OpenAPI spec at that URL.\n\n" +
-          "Tried: " + urlsToTry.join(", ") + "\n\n" +
-          "If the API doesn't publish a spec, paste the raw JSON directly or use AI Discovery on use cases to map endpoints."
-        );
+
+      // No direct spec found — use AI to analyze docs pages and generate spec
+      try {
+        const spec = await generateSpecFromDocs(urls, agent?.name || "", agent?.api_base_url || "");
+        if (spec && (spec.openapi || spec.paths)) {
+          await uploadSpec.mutateAsync({ id: id!, spec });
+          setSpecInput("");
+        } else {
+          alert("AI could not generate a valid spec from the provided URLs.");
+        }
+      } catch (e: unknown) {
+        alert("Failed to generate spec from docs: " + (e instanceof Error ? e.message : "Unknown error"));
       }
       setSpecLoading(false);
       return;
     }
 
-    // Otherwise parse as JSON
+    // Case 2: Raw JSON
     try {
       const spec = JSON.parse(input);
       await uploadSpec.mutateAsync({ id: id!, spec });
       setSpecInput("");
-    } catch { alert("Invalid JSON — paste raw JSON or a URL to an OpenAPI spec"); }
+    } catch {
+      alert("Could not parse input.\n\nAccepted formats:\n• Raw OpenAPI JSON\n• One or more documentation URLs (one per line)");
+    }
   };
 
   const handleGenerate = async () => {
@@ -256,7 +266,7 @@ export default function OperatorDetail() {
               </div>
               <div className="flex gap-2">
                 <textarea className={`${inp} flex-1`}
-                  placeholder={isMcp ? "Paste MCP tool definitions JSON..." : "Paste OpenAPI JSON or a URL (e.g. https://api.example.com/swagger.json)"}
+                  placeholder={isMcp ? "Paste MCP tool definitions JSON..." : "Paste OpenAPI JSON, a spec URL, or documentation URLs (one per line) — AI will generate the spec"}
                   rows={2} value={specInput} onChange={(e) => setSpecInput(e.target.value)} />
                 <button className={`${btnGhost} self-start`} onClick={handleUploadSpec} disabled={specLoading}>
                   {specLoading ? "Fetching..." : isMcp ? "Upload Tools" : "Upload Spec"}

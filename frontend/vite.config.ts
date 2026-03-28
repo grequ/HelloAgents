@@ -12,6 +12,7 @@ export default defineConfig({
       "/workbench/interactions": "http://localhost:8000",
       "/workbench/agents": "http://localhost:8000",
       "/workbench/usecases": "http://localhost:8000",
+      "/workbench/generate-spec-from-docs": "http://localhost:8000",
       "/workbench/test-url": "http://localhost:8000",
       "/workbench/suggest-use-case": "http://localhost:8000",
       "/workbench/discover": "http://localhost:8000",

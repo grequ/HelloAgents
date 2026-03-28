@@ -80,6 +80,19 @@ export async function listOperators(): Promise<Agent[]> {
   return request<Agent[]>("GET", "/agents/operators");
 }
 
+// Generate spec from docs
+export async function generateSpecFromDocs(
+  urls: string[],
+  agentName: string,
+  baseUrl: string,
+): Promise<Record<string, unknown>> {
+  return request<Record<string, unknown>>("POST", "/generate-spec-from-docs", {
+    urls,
+    agent_name: agentName,
+    base_url: baseUrl,
+  });
+}
+
 // Interactions (relational)
 export interface InteractionRow {
   id: string;

@@ -163,6 +163,80 @@ async def test_url(body: dict):
         return {"ok": False, "error": str(e)}
 
 
+@router.post("/generate-spec-from-docs")
+async def generate_spec_from_docs(body: dict):
+    """Fetch documentation URLs and use Claude to generate an OpenAPI spec."""
+    urls = body.get("urls", [])
+    agent_name = body.get("agent_name", "")
+    base_url = body.get("base_url", "")
+    if not urls:
+        raise HTTPException(400, "urls is required (list of documentation URLs)")
+
+    import httpx
+    import anthropic
+    import os
+    import re
+
+    # Fetch content from each URL
+    docs_content = []
+    async with httpx.AsyncClient(timeout=30.0, follow_redirects=True) as http:
+        for url in urls[:10]:  # Max 10 URLs
+            try:
+                resp = await http.get(url)
+                if resp.status_code == 200:
+                    text = resp.text[:30000]  # Limit per page
+                    docs_content.append(f"## Source: {url}\n\n{text}")
+            except Exception as e:
+                docs_content.append(f"## Source: {url}\n\nFailed to fetch: {e}")
+
+    if not docs_content:
+        raise HTTPException(400, "Could not fetch any of the provided URLs")
+
+    combined_docs = "\n\n---\n\n".join(docs_content)
+
+    client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
+    prompt = (
+        "You are an API documentation analyzer. Based on the documentation pages below, "
+        "generate a valid OpenAPI 3.0 JSON specification.\n\n"
+        f"API Name: {agent_name or 'Unknown API'}\n"
+        f"Base URL: {base_url or 'unknown'}\n\n"
+        "Documentation content:\n\n"
+        f"{combined_docs}\n\n"
+        "Generate a complete OpenAPI 3.0 spec as a JSON object with:\n"
+        '- "openapi": "3.0.0"\n'
+        '- "info": with title and version\n'
+        '- "servers": with the base URL\n'
+        '- "paths": with all endpoints you can identify from the docs. '
+        "For each endpoint include: method, operationId, summary, parameters (with name, in, schema), "
+        "and a response description.\n\n"
+        "Extract as many endpoints as possible from the documentation. "
+        "Return ONLY the JSON object, no markdown fences, no explanation."
+    )
+
+    response = client.messages.create(
+        model="claude-sonnet-4-20250514",
+        max_tokens=8000,
+        messages=[{"role": "user", "content": prompt}],
+    )
+
+    text = response.content[0].text.strip()
+    text = re.sub(r'^```json\s*', '', text)
+    text = re.sub(r'\s*```$', '', text)
+
+    try:
+        spec = json.loads(text)
+    except json.JSONDecodeError:
+        # Try to find JSON object in the text
+        start = text.find("{")
+        end = text.rfind("}")
+        if start != -1 and end != -1:
+            spec = json.loads(text[start:end + 1])
+        else:
+            raise HTTPException(500, "Failed to parse generated spec")
+
+    return spec
+
+
 # ---- Use Cases CRUD ----
 
 @router.get("/agents/{agent_id}/usecases", response_model=list[UseCaseOut])
