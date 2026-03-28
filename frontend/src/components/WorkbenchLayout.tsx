@@ -2,10 +2,6 @@ import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 
 const NAV_ITEMS = [
   {
-    section: "DEMO",
-    links: [{ to: "/", label: "Customer Support" }],
-  },
-  {
     section: "WORKBENCH",
     links: [
       { to: "/workbench", label: "Dashboard", end: true },
@@ -13,11 +9,16 @@ const NAV_ITEMS = [
       { to: "/workbench/map", label: "Map" },
     ],
   },
+  {
+    section: "DEMO",
+    links: [{ to: "/workbench/demo", label: "Customer Support" }],
+  },
 ];
 
 function pageTitle(pathname: string): string {
   if (pathname === "/workbench") return "Dashboard";
   if (pathname === "/workbench/map") return "Agent Architecture Map";
+  if (pathname === "/workbench/demo") return "Customer Support Demo";
   if (pathname.includes("/specs")) return "Specs";
   if (pathname.includes("/usecases")) return "Playground";
   if (pathname.match(/\/agents\/[^/]+$/)) return "Agent Detail";
@@ -26,7 +27,6 @@ function pageTitle(pathname: string): string {
 
 function parentPath(pathname: string): { to: string; label: string } | null {
   if (pathname.includes("/usecases/")) {
-    // /workbench/agents/:id/usecases/:ucId → back to agent
     const agentId = pathname.split("/agents/")[1]?.split("/")[0];
     return agentId ? { to: `/workbench/agents/${agentId}`, label: "Agent Detail" } : null;
   }
@@ -79,7 +79,7 @@ export default function WorkbenchLayout() {
         </nav>
 
         <div className="px-6 py-4 text-[11px] text-tedee-gray/60">
-          v1.0.0
+          v2.0.0
         </div>
       </aside>
 

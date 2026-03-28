@@ -7,24 +7,24 @@ export default function AgentSpecList() {
   if (isLoading) return <p className="text-sm text-gray-500">Loading...</p>;
 
   return (
-    <div className="max-w-5xl mx-auto">
-      <div className="space-y-3">
+    <div className="max-w-7xl mx-auto">
+      <div className="grid grid-cols-[repeat(auto-fill,minmax(300px,1fr))] gap-3">
         {specs.map((s) => (
           <Link
             to={`/workbench/specs/${s.id}`}
             key={s.id}
             className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 block no-underline hover:shadow-md transition-shadow"
           >
-            <div className="flex items-start justify-between mb-1">
+            <div className="flex items-start justify-between mb-2">
               <span className="font-semibold text-text-primary text-sm">{s.name}</span>
-              <span className="text-[11px] px-2 py-0.5 rounded-full bg-gray-200 text-gray-700 font-medium">
+              <span className={`text-[11px] px-2 py-0.5 rounded-full font-medium ${s.status === "generated" ? "bg-emerald-100 text-emerald-700" : "bg-gray-200 text-gray-700"}`}>
                 {s.status}
               </span>
             </div>
-            <div className="flex gap-3 text-[11px] text-gray-400">
+            <div className="flex flex-wrap gap-2 text-[11px] text-gray-400">
               <span>{(s.agent_ids || []).length} agents</span>
               <span>{(s.use_case_ids || []).length} use cases</span>
-              <span>{s.generated_at ? new Date(s.generated_at).toLocaleDateString() : ""}</span>
+              {s.generated_at && <span>{new Date(s.generated_at).toLocaleDateString()}</span>}
             </div>
           </Link>
         ))}
