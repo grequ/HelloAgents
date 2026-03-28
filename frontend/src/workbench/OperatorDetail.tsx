@@ -134,20 +134,45 @@ export default function OperatorDetail() {
     const input = specInput.trim();
     if (!input) return;
 
-    // Detect URL — fetch the JSON from it
+    // Detect URL — try the URL directly, then common OpenAPI spec paths
     if (input.startsWith("http://") || input.startsWith("https://")) {
       setSpecLoading(true);
-      try {
-        const resp = await fetch(input);
-        if (!resp.ok) { alert(`Fetch failed: ${resp.status} ${resp.statusText}`); return; }
-        const spec = await resp.json();
-        await uploadSpec.mutateAsync({ id: id!, spec });
-        setSpecInput("");
-      } catch (e: unknown) {
-        alert("Failed to fetch or parse: " + (e instanceof Error ? e.message : "Unknown error"));
-      } finally {
-        setSpecLoading(false);
+      const baseUrl = input.replace(/\/+$/, "");
+      const urlsToTry = [
+        baseUrl,
+        // Common OpenAPI/Swagger spec locations
+        ...(baseUrl.endsWith(".json") || baseUrl.endsWith(".yaml") ? [] : [
+          `${baseUrl}/openapi.json`,
+          `${baseUrl}/swagger.json`,
+          `${baseUrl}/api-docs`,
+          `${baseUrl}/v1/openapi.json`,
+          `${baseUrl}/v2/swagger.json`,
+        ]),
+      ];
+      let found = false;
+      for (const url of urlsToTry) {
+        try {
+          const resp = await fetch(url);
+          if (!resp.ok) continue;
+          const contentType = resp.headers.get("content-type") || "";
+          if (!contentType.includes("json") && !contentType.includes("yaml")) continue;
+          const spec = await resp.json();
+          if (spec && (spec.openapi || spec.swagger || spec.paths)) {
+            await uploadSpec.mutateAsync({ id: id!, spec });
+            setSpecInput("");
+            found = true;
+            break;
+          }
+        } catch { /* try next */ }
       }
+      if (!found) {
+        alert(
+          "Could not find an OpenAPI spec at that URL.\n\n" +
+          "Tried: " + urlsToTry.join(", ") + "\n\n" +
+          "If the API doesn't publish a spec, paste the raw JSON directly or use AI Discovery on use cases to map endpoints."
+        );
+      }
+      setSpecLoading(false);
       return;
     }
 
