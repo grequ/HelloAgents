@@ -120,7 +120,10 @@ export default function Playground() {
         if (suggestion.expected_output) { setUcOutput(suggestion.expected_output); }
         if (suggestion.frequency) { setUcFreq(suggestion.frequency); }
         if (suggestion.is_write !== undefined) { setUcIsWrite(suggestion.is_write); }
-        if (suggestion.sample_conversation) { setUcSampleConv(suggestion.sample_conversation); }
+        if (suggestion.sample_conversation) {
+          const conv = suggestion.sample_conversation;
+          setUcSampleConv(Array.isArray(conv) ? conv.join("\n") : conv);
+        }
         setUcDirty(true);
       }
     } catch (e: unknown) {
