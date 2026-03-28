@@ -136,6 +136,28 @@ async def test_connection(agent_id: str):
         return {"ok": False, "error": str(e)}
 
 
+@router.post("/test-url")
+async def test_url(body: dict):
+    """Test a URL + API key without creating an agent."""
+    url = body.get("url", "")
+    api_key = body.get("api_key", "")
+    auth_type = body.get("auth_type", "bearer")
+    if not url:
+        raise HTTPException(400, "url is required")
+    import httpx
+    headers = {}
+    if auth_type == "bearer" and api_key:
+        headers["Authorization"] = f"Bearer {api_key}"
+    elif auth_type == "api_key_header" and api_key:
+        headers["X-Api-Key"] = api_key
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as http:
+            resp = await http.get(url, headers=headers)
+        return {"ok": True, "status_code": resp.status_code}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+
 # ---- Use Cases CRUD ----
 
 @router.get("/agents/{agent_id}/usecases", response_model=list[UseCaseOut])

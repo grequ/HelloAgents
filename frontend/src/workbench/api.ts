@@ -72,6 +72,10 @@ export async function testAgentConnection(id: string): Promise<ConnectionResult>
   return request<ConnectionResult>("POST", `/agents/${id}/test-connection`);
 }
 
+export async function testUrl(url: string, apiKey: string, authType: string): Promise<ConnectionResult> {
+  return request<ConnectionResult>("POST", "/test-url", { url, api_key: apiKey, auth_type: authType });
+}
+
 // Interactions (relational)
 export interface InteractionRow {
   id: string;

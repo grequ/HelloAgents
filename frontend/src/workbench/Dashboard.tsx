@@ -1,8 +1,8 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import type { AgentCreate, ConnectionResult } from "../types";
-import { useDashboard, useCreateAgent, useSeedDemoData } from "./queries";
-import { setAgentApiKey, testAgentConnection, createAgent as apiCreateAgent } from "./api";
+import type { ConnectionResult } from "../types";
+import { useDashboard, useCreateAgent, useSeedDemoData, useSetApiKey } from "./queries";
+import { testUrl } from "./api";
 import { btnPrimary, btnSecondary, btnGhost, inp } from "./ui";
 
 const STATUS_COLORS: Record<string, string> = {
@@ -19,46 +19,28 @@ const EMPTY_FORM = {
 };
 
 export default function Dashboard() {
-  const { data, isLoading, refetch } = useDashboard();
-  const createAgentMut = useCreateAgent();
+  const { data, isLoading } = useDashboard();
+  const createAgent = useCreateAgent();
+  const setApiKey = useSetApiKey();
   const seedDemo = useSeedDemoData();
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({ ...EMPTY_FORM });
   const [connResult, setConnResult] = useState<ConnectionResult | null>(null);
   const [testing, setTesting] = useState(false);
-  const [creating, setCreating] = useState(false);
 
   const isMcp = form.api_type === "mcp";
   const isNone = form.api_type === "none";
   const needsTest = !isMcp && !isNone;
   const connectionOk = connResult?.ok === true;
-  const canCreate = form.name.trim().length > 0 && (
-    isNone || isMcp || connectionOk
-  );
+  const canCreate = form.name.trim().length > 0 && (isNone || isMcp || connectionOk);
 
   const handleTestConnection = async () => {
-    if (!form.api_base_url.trim()) { alert("Enter a Base URL first"); return; }
+    if (!form.api_base_url.trim()) return;
     setTesting(true);
     setConnResult(null);
     try {
-      // Create agent temporarily to test, then we'll use it
-      const agent = await apiCreateAgent({
-        name: form.name || "Test",
-        description: form.description,
-        category: form.category,
-        owner_team: form.owner_team,
-        api_type: form.api_type,
-        api_base_url: form.api_base_url,
-      });
-      // Set API key if provided
-      if (form.api_key.trim()) {
-        await setAgentApiKey(agent.id, form.api_key);
-      }
-      // Test connection
-      const result = await testAgentConnection(agent.id);
+      const result = await testUrl(form.api_base_url, form.api_key, "bearer");
       setConnResult(result);
-      // Store the created agent ID so Create doesn't duplicate
-      setForm((f) => ({ ...f, _createdId: agent.id } as typeof f));
     } catch (e: unknown) {
       setConnResult({ ok: false, error: e instanceof Error ? e.message : "Unknown error" });
     } finally {
@@ -68,36 +50,23 @@ export default function Dashboard() {
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
-    setCreating(true);
     try {
-      // If we already created the agent during test, just set the key and refresh
-      const existingId = (form as Record<string, unknown>)._createdId as string | undefined;
-      if (existingId) {
-        if (form.api_key.trim()) {
-          await setAgentApiKey(existingId, form.api_key);
-        }
-      } else {
-        // Create new agent
-        const agent = await apiCreateAgent({
-          name: form.name,
-          description: form.description,
-          category: form.category,
-          owner_team: form.owner_team,
-          api_type: form.api_type,
-          api_base_url: form.api_base_url,
-        });
-        if (form.api_key.trim()) {
-          await setAgentApiKey(agent.id, form.api_key);
-        }
+      const agent = await createAgent.mutateAsync({
+        name: form.name,
+        description: form.description,
+        category: form.category,
+        owner_team: form.owner_team,
+        api_type: form.api_type,
+        api_base_url: form.api_base_url,
+      });
+      if (form.api_key.trim()) {
+        await setApiKey.mutateAsync({ id: agent.id, apiKey: form.api_key });
       }
       setForm({ ...EMPTY_FORM });
       setConnResult(null);
       setShowForm(false);
-      refetch();
     } catch (e: unknown) {
       alert("Create failed: " + (e instanceof Error ? e.message : "Unknown error"));
-    } finally {
-      setCreating(false);
     }
   };
 
@@ -127,9 +96,7 @@ export default function Dashboard() {
       {/* Agents section */}
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-lg font-semibold text-text-primary">Agents</h2>
-        <button className={btnPrimary} onClick={() => setShowForm(!showForm)}>
-          + Add Agent
-        </button>
+        <button className={btnPrimary} onClick={() => setShowForm(!showForm)}>+ Add Agent</button>
       </div>
 
       {showForm && (
@@ -170,12 +137,11 @@ export default function Dashboard() {
             </>
           )}
 
-          {/* Test Connection */}
           {needsTest && (
             <div className="flex items-center gap-3">
               <button type="button" className={btnGhost}
                 onClick={handleTestConnection}
-                disabled={testing || !form.api_base_url.trim() || !form.name.trim()}>
+                disabled={testing || !form.api_base_url.trim()}>
                 {testing ? "Testing..." : "Test Connection"}
               </button>
               {connResult && (
@@ -189,17 +155,16 @@ export default function Dashboard() {
             </div>
           )}
 
-          <div className="flex gap-2">
-            <button type="submit" className={btnPrimary}
-              disabled={creating || !canCreate}>
-              {creating ? "Creating..." : "Create"}
+          <div className="flex gap-2 items-center">
+            <button type="submit" className={btnPrimary} disabled={createAgent.isPending || !canCreate}>
+              {createAgent.isPending ? "Creating..." : "Create"}
             </button>
             <button type="button" className={btnSecondary}
               onClick={() => { setShowForm(false); setForm({ ...EMPTY_FORM }); setConnResult(null); }}>
               Cancel
             </button>
             {needsTest && !connectionOk && form.api_base_url.trim() && (
-              <span className="text-xs text-gray-400 self-center">Test connection to enable Create</span>
+              <span className="text-xs text-gray-400">Test connection to enable Create</span>
             )}
           </div>
         </form>
@@ -207,11 +172,8 @@ export default function Dashboard() {
 
       <div className="grid grid-cols-[repeat(auto-fill,minmax(300px,1fr))] gap-3">
         {agents.map((s) => (
-          <Link
-            to={`/workbench/agents/${s.id}`}
-            key={s.id}
-            className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 block no-underline hover:shadow-md transition-shadow"
-          >
+          <Link to={`/workbench/agents/${s.id}`} key={s.id}
+            className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 block no-underline hover:shadow-md transition-shadow">
             <div className="flex items-start justify-between mb-2">
               <span className="font-semibold text-text-primary text-sm">{s.name}</span>
               <span className={`text-[11px] px-2 py-0.5 rounded-full font-medium ${STATUS_COLORS[s.status] || "bg-gray-200 text-gray-700"}`}>
