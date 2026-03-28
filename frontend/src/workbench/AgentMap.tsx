@@ -8,34 +8,35 @@ import type { InteractionRow } from "./api";
 
 interface ToolDef { name: string; description?: string }
 
-interface AgentNode {
-  spec: AgentSpec;
+interface MapNode {
+  id: string;
+  name: string;
   tools: ToolDef[];
-  agentNames: string[];
+  status: string;
+  linkTo: string;
+  hasSpec: boolean;
   x: number;
   y: number;
 }
 
 interface Edge {
-  fromSpecId: string;
-  toSpecId: string;
+  fromId: string;
+  toId: string;
 }
 
 // --- Layout constants ---
 
 const CARD_W = 280;
-const CARD_MIN_H = 120;
+const CARD_MIN_H = 100;
 const GAP_X = 120;
 const GAP_Y = 80;
 const TOOL_LINE_H = 20;
-const AGENT_LINE_H = 18;
 const CARD_HEADER = 48;
 const CARD_PADDING_BOTTOM = 16;
 
-function cardHeight(node: AgentNode): number {
+function cardHeight(node: MapNode): number {
   const toolsH = Math.max(node.tools.length, 1) * TOOL_LINE_H;
-  const agH = node.agentNames.length > 0 ? 20 + node.agentNames.length * AGENT_LINE_H : 0;
-  return Math.max(CARD_MIN_H, CARD_HEADER + toolsH + agH + CARD_PADDING_BOTTOM);
+  return Math.max(CARD_MIN_H, CARD_HEADER + toolsH + CARD_PADDING_BOTTOM);
 }
 
 function parseTools(toolsJson: unknown): ToolDef[] {
@@ -45,31 +46,45 @@ function parseTools(toolsJson: unknown): ToolDef[] {
     .map((t) => ({ name: t.name, description: t.description }));
 }
 
-// --- Build edges from DB interactions ---
+// --- Build nodes from agents (primary) enriched with spec data ---
 
-function buildEdges(
-  specs: AgentSpec[],
-  interactions: InteractionRow[],
-): Edge[] {
-  // Map agent_id → spec_id
-  const agentToSpec = new Map<string, string>();
+function buildNodes(agents: Agent[], specs: AgentSpec[]): MapNode[] {
+  // Map agent_id → spec (best match)
+  const agentToSpec = new Map<string, AgentSpec>();
   for (const spec of specs) {
     for (const aid of spec.agent_ids || []) {
-      agentToSpec.set(aid, spec.id);
+      agentToSpec.set(aid, spec);
     }
   }
 
+  return agents.map((agent) => {
+    const spec = agentToSpec.get(agent.id);
+    return {
+      id: agent.id,
+      name: agent.name,
+      tools: spec ? parseTools(spec.tools_json) : [],
+      status: spec ? spec.status : agent.status,
+      linkTo: spec ? `/workbench/specs/${spec.id}` : `/workbench/agents/${agent.id}`,
+      hasSpec: !!spec,
+      x: 0,
+      y: 0,
+    };
+  });
+}
+
+// --- Build edges directly from interactions (agent-to-agent) ---
+
+function buildEdges(agents: Agent[], interactions: InteractionRow[]): Edge[] {
+  const agentIds = new Set(agents.map((a) => a.id));
   const edges: Edge[] = [];
   const seen = new Set<string>();
 
   for (const row of interactions) {
-    const fromSpec = agentToSpec.get(row.from_agent_id);
-    const toSpec = agentToSpec.get(row.to_agent_id);
-    if (fromSpec && toSpec && fromSpec !== toSpec) {
-      const key = `${fromSpec}→${toSpec}`;
+    if (agentIds.has(row.from_agent_id) && agentIds.has(row.to_agent_id) && row.from_agent_id !== row.to_agent_id) {
+      const key = `${row.from_agent_id}→${row.to_agent_id}`;
       if (!seen.has(key)) {
         seen.add(key);
-        edges.push({ fromSpecId: fromSpec, toSpecId: toSpec });
+        edges.push({ fromId: row.from_agent_id, toId: row.to_agent_id });
       }
     }
   }
@@ -78,38 +93,31 @@ function buildEdges(
 
 // --- Layout nodes in layers ---
 
-function layoutNodes(
-  specs: AgentSpec[],
-  agentsById: Record<string, Agent>,
-  edges: Edge[],
-): AgentNode[] {
-  // Build adjacency for layering
+function layoutNodes(nodes: MapNode[], edges: Edge[]): void {
   const calledBy = new Map<string, Set<string>>();
-  for (const spec of specs) calledBy.set(spec.id, new Set());
-  for (const e of edges) calledBy.get(e.toSpecId)?.add(e.fromSpecId);
+  for (const n of nodes) calledBy.set(n.id, new Set());
+  for (const e of edges) calledBy.get(e.toId)?.add(e.fromId);
 
   const layers: string[][] = [];
   const assigned = new Set<string>();
 
-  // Layer 0: nodes not called by anyone (roots/orchestrators)
-  const roots = specs.filter((s) => (calledBy.get(s.id)?.size || 0) === 0);
+  // Layer 0: not called by anyone
+  const roots = nodes.filter((n) => (calledBy.get(n.id)?.size || 0) === 0);
   if (roots.length > 0) {
-    layers.push(roots.map((s) => s.id));
-    roots.forEach((s) => assigned.add(s.id));
+    layers.push(roots.map((n) => n.id));
+    roots.forEach((n) => assigned.add(n.id));
   }
 
-  // BFS for subsequent layers
   let depth = 0;
-  while (assigned.size < specs.length && depth < 10) {
+  while (assigned.size < nodes.length && depth < 10) {
     const cur = layers[depth] || [];
     const next: string[] = [];
-    for (const s of specs) {
-      if (!assigned.has(s.id) && calledBy.get(s.id)?.size) {
-        // All callers assigned?
-        const callers = calledBy.get(s.id)!;
+    for (const n of nodes) {
+      if (!assigned.has(n.id)) {
+        const callers = calledBy.get(n.id)!;
         if ([...callers].some((c) => assigned.has(c))) {
-          next.push(s.id);
-          assigned.add(s.id);
+          next.push(n.id);
+          assigned.add(n.id);
         }
       }
     }
@@ -117,28 +125,23 @@ function layoutNodes(
     else break;
     depth++;
   }
-  // Remaining
-  const rest = specs.filter((s) => !assigned.has(s.id));
-  if (rest.length > 0) layers.push(rest.map((s) => s.id));
+  const rest = nodes.filter((n) => !assigned.has(n.id));
+  if (rest.length > 0) layers.push(rest.map((n) => n.id));
 
-  const specById = Object.fromEntries(specs.map((s) => [s.id, s]));
-  const nodes: AgentNode[] = [];
+  const nodeById = Object.fromEntries(nodes.map((n) => [n.id, n]));
   let currentY = 40;
 
   for (const layer of layers) {
     let maxH = 0;
     for (let i = 0; i < layer.length; i++) {
-      const spec = specById[layer[i]];
-      if (!spec) continue;
-      const tools = parseTools(spec.tools_json);
-      const agentNames = (spec.agent_ids || []).map((aid) => agentsById[aid]?.name).filter(Boolean) as string[];
-      const node: AgentNode = { spec, tools, agentNames, x: 40 + i * (CARD_W + GAP_X), y: currentY };
-      nodes.push(node);
+      const node = nodeById[layer[i]];
+      if (!node) continue;
+      node.x = 40 + i * (CARD_W + GAP_X);
+      node.y = currentY;
       maxH = Math.max(maxH, cardHeight(node));
     }
     currentY += maxH + GAP_Y;
   }
-  return nodes;
 }
 
 // --- Component ---
@@ -148,19 +151,20 @@ export default function AgentMap() {
   const { data: agents = [], isLoading: agentsLoading } = useAgents();
   const { data: interactions = [], isLoading: intLoading } = useAllInteractions();
 
-  const agentsById = useMemo(() => Object.fromEntries(agents.map((s) => [s.id, s])), [agents]);
-  const edges = useMemo(() => buildEdges(specs, interactions), [specs, interactions]);
-  const nodes = useMemo(() => layoutNodes(specs, agentsById, edges), [specs, agentsById, edges]);
+  const nodes = useMemo(() => buildNodes(agents, specs), [agents, specs]);
+  const edges = useMemo(() => buildEdges(agents, interactions), [agents, interactions]);
+
+  useMemo(() => layoutNodes(nodes, edges), [nodes, edges]);
 
   if (specsLoading || agentsLoading || intLoading) return <p className="text-sm text-gray-500">Loading...</p>;
 
-  if (specs.length === 0) {
+  if (agents.length === 0) {
     return (
       <div className="max-w-3xl mx-auto">
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-10 text-center">
           <div className="text-4xl mb-3 opacity-40">&#128506;</div>
           <h2 className="text-lg font-semibold text-text-primary mb-2">No agents to map yet</h2>
-          <p className="text-sm text-gray-500 mb-4">Generate agent specs from your agents first.</p>
+          <p className="text-sm text-gray-500 mb-4">Create agents on the Dashboard first.</p>
           <Link to="/workbench" className="px-4 py-2 rounded-lg bg-tedee-cyan text-tedee-navy font-semibold text-sm hover:bg-hover-cyan transition-colors inline-block">
             Go to Dashboard
           </Link>
@@ -169,7 +173,7 @@ export default function AgentMap() {
     );
   }
 
-  const nodeMap = Object.fromEntries(nodes.map((n) => [n.spec.id, n]));
+  const nodeMap = Object.fromEntries(nodes.map((n) => [n.id, n]));
 
   // SVG dimensions
   let svgWidth = Math.max(800, Math.max(...nodes.map((n) => n.x + CARD_W)) + 80);
@@ -183,7 +187,6 @@ export default function AgentMap() {
     const offset = Math.max(0, (svgWidth - totalW) / 2 - lnodes[0].x);
     for (const n of lnodes) n.x += offset;
   }
-  // Recalc width after centering
   svgWidth = Math.max(svgWidth, Math.max(...nodes.map((n) => n.x + CARD_W)) + 80);
 
   return (
@@ -199,10 +202,10 @@ export default function AgentMap() {
             </filter>
           </defs>
 
-          {/* Edges — solid cyan lines with arrows */}
+          {/* Edges */}
           {edges.map((edge, i) => {
-            const from = nodeMap[edge.fromSpecId];
-            const to = nodeMap[edge.toSpecId];
+            const from = nodeMap[edge.fromId];
+            const to = nodeMap[edge.toId];
             if (!from || !to) return null;
 
             const fromCX = from.x + CARD_W / 2;
@@ -210,7 +213,6 @@ export default function AgentMap() {
             const toCX = to.x + CARD_W / 2;
             const toTop = to.y;
 
-            // If same row (horizontal), draw side-to-side
             if (from.y === to.y) {
               const fromRight = from.x + CARD_W;
               const toLeft = to.x;
@@ -219,13 +221,9 @@ export default function AgentMap() {
               const ex = goRight ? toLeft : to.x + CARD_W;
               const sy = from.y + cardHeight(from) / 2;
               const ey = to.y + cardHeight(to) / 2;
-              return (
-                <line key={i} x1={sx} y1={sy} x2={ex} y2={ey}
-                  stroke="#94a3b8" strokeWidth={1.5} markerEnd="url(#arrow)" />
-              );
+              return <line key={i} x1={sx} y1={sy} x2={ex} y2={ey} stroke="#94a3b8" strokeWidth={1.5} markerEnd="url(#arrow)" />;
             }
 
-            // Vertical — curved bezier
             const midY = (fromBottom + toTop) / 2;
             return (
               <path key={i}
@@ -234,34 +232,36 @@ export default function AgentMap() {
             );
           })}
 
-          {/* Agent cards */}
+          {/* Nodes — every agent appears, with or without a spec */}
           {nodes.map((node) => {
             const h = cardHeight(node);
-            const nameText = node.spec.name.length > 28 ? node.spec.name.slice(0, 26) + "..." : node.spec.name;
+            const nameText = node.name.length > 28 ? node.name.slice(0, 26) + "..." : node.name;
+            const statusColor = node.hasSpec
+              ? (node.status === "generated" ? { bg: "#dcfce7", text: "#166534" } : { bg: "#f3f4f6", text: "#6b7280" })
+              : { bg: "#fef3c7", text: "#92400e" };
+            const statusLabel = node.hasSpec ? node.status : "no spec";
 
             return (
-              <g key={node.spec.id} className="cursor-pointer">
-                {/* Card bg */}
+              <g key={node.id} className="cursor-pointer">
                 <rect x={node.x} y={node.y} width={CARD_W} height={h} rx={12} ry={12}
-                  fill="white" stroke="#e5e7eb" strokeWidth={1} filter="url(#cardShadow)" />
-                {/* Cyan top bar */}
-                <rect x={node.x + 1} y={node.y + 1} width={CARD_W - 2} height={5} rx={2} fill="#34CFFD" />
+                  fill="white" stroke={node.hasSpec ? "#e5e7eb" : "#fde68a"} strokeWidth={1}
+                  filter="url(#cardShadow)" />
+                <rect x={node.x + 1} y={node.y + 1} width={CARD_W - 2} height={5} rx={2}
+                  fill={node.hasSpec ? "#34CFFD" : "#fbbf24"} />
 
-                {/* Agent name */}
-                <a href={`/workbench/specs/${node.spec.id}`}>
+                <a href={node.linkTo}>
                   <text x={node.x + 16} y={node.y + 30} fontSize={14} fontWeight={700} fill="#22345A">
                     {nameText}
                   </text>
                 </a>
 
-                {/* Status badge — top-right, below the cyan bar */}
-                <rect x={node.x + CARD_W - 16 - node.spec.status.length * 6.5}
-                  y={node.y + 12} width={node.spec.status.length * 6.5 + 12} height={18} rx={9}
-                  fill={node.spec.status === "generated" ? "#dcfce7" : "#f3f4f6"} />
+                {/* Status badge */}
+                <rect x={node.x + CARD_W - 16 - statusLabel.length * 6.5}
+                  y={node.y + 12} width={statusLabel.length * 6.5 + 12} height={18} rx={9}
+                  fill={statusColor.bg} />
                 <text x={node.x + CARD_W - 10} y={node.y + 25}
-                  fontSize={9} fontWeight={500} textAnchor="end"
-                  fill={node.spec.status === "generated" ? "#166534" : "#6b7280"}>
-                  {node.spec.status}
+                  fontSize={9} fontWeight={500} textAnchor="end" fill={statusColor.text}>
+                  {statusLabel}
                 </text>
 
                 {/* Tools */}
@@ -274,20 +274,9 @@ export default function AgentMap() {
                   </text>
                 )) : (
                   <text x={node.x + 16} y={node.y + CARD_HEADER + 16} fontSize={12} fill="#9ca3af" fontStyle="italic">
-                    (no tools defined)
+                    {node.hasSpec ? "(no tools defined)" : "(generate spec to see tools)"}
                   </text>
                 )}
-
-                {/* Agents */}
-                {node.agentNames.length > 0 && (() => {
-                  const agY = node.y + CARD_HEADER + 16 + Math.max(node.tools.length, 1) * TOOL_LINE_H + 8;
-                  return (<>
-                    <text x={node.x + 16} y={agY} fontSize={10} fill="#A9A9A9" fontWeight={600} letterSpacing="0.05em">AGENTS</text>
-                    {node.agentNames.map((name, si) => (
-                      <text key={si} x={node.x + 16} y={agY + 14 + si * AGENT_LINE_H} fontSize={11} fill="#64748b">{name}</text>
-                    ))}
-                  </>);
-                })()}
               </g>
             );
           })}
@@ -298,13 +287,17 @@ export default function AgentMap() {
       <div className="flex items-center gap-6 mt-4 text-xs text-gray-500">
         <div className="flex items-center gap-2">
           <svg width="32" height="8"><line x1="0" y1="4" x2="26" y2="4" stroke="#94a3b8" strokeWidth={1.5} /><polygon points="26,1 32,4 26,7" fill="#94a3b8" /></svg>
-          <span>calls / asks</span>
+          <span>asks / calls</span>
         </div>
         <div className="flex items-center gap-2">
           <div className="w-4 h-1.5 bg-tedee-cyan rounded" />
-          <span>Agent</span>
+          <span>Has spec</span>
         </div>
-        <span className="text-gray-400">Click agent name to open spec</span>
+        <div className="flex items-center gap-2">
+          <div className="w-4 h-1.5 bg-amber-400 rounded" />
+          <span>No spec yet</span>
+        </div>
+        <span className="text-gray-400">Click agent name to open detail</span>
       </div>
     </div>
   );
