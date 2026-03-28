@@ -523,62 +523,77 @@ All information about a single system + its use cases.
 
 **Layout — 3 sections:**
 
-##### Section A: System Info (top)
+**Header:**
 ```
 ┌────────────────────────────────────────────────────────────────┐
-│  SAP WMS                                          [Edit] [Delete]│
+│  ← Back                                                         │
+│  SAP WMS                    [Save] [Generate Agent Spec] [Delete]│
 │  Warehouse management — pick, pack, ship, inventory              │
-│  Owner: Logistics & Fulfillment     Category: logistics          │
-│                                                                   │
-│  API Access:                                                      │
-│  ┌──────────────────────────────────────────────────────────┐    │
-│  │  Type:     REST API                                       │    │
-│  │  Base URL: https://api.sapwms.example.com/v1             │    │
-│  │  Docs:     https://docs.sapwms.example.com  [Open ↗]    │    │
-│  │  Auth:     Bearer Token                                   │    │
-│  │  API Key:  ●●●●●●●●●●●●  [Change] [Test Connection]    │    │
-│  │                                                           │    │
-│  │  API Spec: ✅ OpenAPI 3.0 loaded (23 endpoints)          │    │
-│  │            [Re-upload] [Fetch from URL]                   │    │
-│  └──────────────────────────────────────────────────────────┘    │
 └──────────────────────────────────────────────────────────────────┘
 ```
 
-##### Section B: Use Cases (middle)
+Top actions: Save persists all config fields, Generate runs spec generation,
+Delete removes the system. All always visible.
+
+##### Section A: API & Technology
+```
+┌────────────────────────────────────────────────────────────────┐
+│  API & Technology                                                │
+│                                                                   │
+│  API Configuration (read-only display + set key/spec/test)       │
+│  Technology Stack: [Python 3.11 ▼]   Framework: [FastAPI + ...]  │
+│  Deployment: [Docker ...]  Error Handling: [Retry once on 5xx...]│
+│  Auth Notes: [bearer — API key from env var]                     │
+└──────────────────────────────────────────────────────────────────┘
+```
+
+##### Section B: Behavior
+```
+┌────────────────────────────────────────────────────────────────┐
+│  Behavior                                                        │
+│                                                                   │
+│  Agent Name: [SAP WMS Agent                                 ]    │
+│  Agent Role & Persona: (auto-sized textarea, shows full text)    │
+│  Additional Context: (auto-sized textarea, shows full text)      │
+└──────────────────────────────────────────────────────────────────┘
+```
+
+Textareas auto-expand to show their full content (no scrolling).
+
+##### Section C: Interactions
+
+Split into two clear sub-sections — "asks" and "provides to":
+
+```
+┌────────────────────────────────────────────────────────────────┐
+│  Interactions                                                    │
+│                                                                   │
+│  This Agent Asks                                                 │
+│  ┌────────────────────────────────────────────────────────┐     │
+│  │ [SAP WMS Agent] asks [Payment Agent ▼] for:            │     │
+│  │ [x] initiate_refund  [ ] check_invoice                 │     │
+│  │                                            [Remove]    │     │
+│  └────────────────────────────────────────────────────────┘     │
+│  [+ Add]                                                         │
+│                                                                   │
+│  This Agent Provides Information To                              │
+│  ┌────────────────────────────────────────────────────────┐     │
+│  │ [SAP WMS Agent] provides to [Support Orch. ▼] for:    │     │
+│  │ [x] ask_logistics  [x] track_package                   │     │
+│  │                                            [Remove]    │     │
+│  └────────────────────────────────────────────────────────┘     │
+│  [+ Add]                                                         │
+└──────────────────────────────────────────────────────────────────┘
+```
+
+Agent dropdowns exclude the current agent and agents already selected
+in the same sub-section.
+
+##### Section D: Use Cases
 ```
 ┌────────────────────────────────────────────────────────────────┐
 │  Use Cases (8)                                   [+ Add Use Case]│
-│                                                                   │
-│  ┌────────────────────────────────────────────────────────┐      │
-│  │ UC-001  Track package location               HIGH  READ│      │
-│  │ "Customer asks where their package is"                  │      │
-│  │ Status: ✅ Tested (3 successful runs)                   │      │
-│  │                                        [Open] [Test]   │      │
-│  └────────────────────────────────────────────────────────┘      │
-│  ┌────────────────────────────────────────────────────────┐      │
-│  │ UC-002  Check warehouse pack status           MED  READ│      │
-│  │ "Has the order been picked and packed?"                 │      │
-│  │ Status: 🔍 Discovered (endpoints mapped)                │      │
-│  │                                        [Open] [Test]   │      │
-│  └────────────────────────────────────────────────────────┘      │
-│  ...                                                              │
-└──────────────────────────────────────────────────────────────────┘
-```
-
-##### Section C: Generated Agent Spec (bottom, when ready)
-```
-┌────────────────────────────────────────────────────────────────┐
-│  Agent Spec                               [Generate] [Download] │
-│                                                                  │
-│  ⚠️  3 of 8 use cases not yet tested. Generate anyway?          │
-│                                                                  │
-│  Preview:                                                        │
-│  ┌──────────────────────────────────────────────────────────┐   │
-│  │  # Logistics Agent Specification                          │   │
-│  │  ## Tools (5)                                             │   │
-│  │  - track_package_status (UC-001, UC-002)                  │   │
-│  │  ...                                                      │   │
-│  └──────────────────────────────────────────────────────────┘   │
+│  (same as before — card list with priority/status/actions)       │
 └──────────────────────────────────────────────────────────────────┘
 ```
 
