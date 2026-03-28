@@ -11,6 +11,7 @@ CREATE TABLE IF NOT EXISTS wb_agents (
     api_base_url    VARCHAR(500),
     api_docs_url    VARCHAR(500),
     api_spec        JSON,
+    api_spec_source TEXT,
     api_key_enc     VARCHAR(500),
     api_auth_type   VARCHAR(30) DEFAULT 'bearer',
     api_auth_config JSON,

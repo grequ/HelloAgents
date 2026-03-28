@@ -49,6 +49,7 @@ class AgentOut(BaseModel):
     agent_config: dict | None = None
     has_api_key: bool = False
     has_api_spec: bool = False
+    api_spec_source: str | None = None
     api_spec_endpoint_count: int = 0
     api_endpoints: list = []
     status: str

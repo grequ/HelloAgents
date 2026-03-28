@@ -64,8 +64,8 @@ export async function setAgentApiKey(id: string, apiKey: string): Promise<void> 
   return request<void>("POST", `/agents/${id}/api-key`, { api_key: apiKey });
 }
 
-export async function uploadAgentSpecJson(id: string, spec: unknown): Promise<void> {
-  return request<void>("POST", `/agents/${id}/upload-spec-json`, spec);
+export async function uploadAgentSpecJson(id: string, spec: unknown, source?: string): Promise<void> {
+  return request<void>("POST", `/agents/${id}/upload-spec-json`, { spec, source });
 }
 
 export async function testAgentConnection(id: string): Promise<ConnectionResult> {

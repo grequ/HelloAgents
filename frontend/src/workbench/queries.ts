@@ -157,8 +157,8 @@ export function useSetApiKey() {
 export function useUploadSpec() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, spec }: { id: string; spec: unknown }) =>
-      api.uploadAgentSpecJson(id, spec),
+    mutationFn: ({ id, spec, source }: { id: string; spec: unknown; source?: string }) =>
+      api.uploadAgentSpecJson(id, spec, source),
     onSuccess: (_data, vars) => {
       qc.invalidateQueries({ queryKey: keys.agent(vars.id) });
     },

@@ -115,9 +115,13 @@ async def upload_spec(agent_id: str, file: UploadFile = File(...)):
 
 @router.post("/agents/{agent_id}/upload-spec-json")
 async def upload_spec_json(agent_id: str, body: dict):
-    """Accept API spec as JSON body (alternative to file upload)."""
-    await wb_db.set_agent_api_spec(agent_id, body)
-    return {"ok": True, "endpoint_count": len(body.get("paths", {}))}
+    """Accept API spec as JSON body with optional source URL."""
+    spec = body.get("spec", body)  # Support {spec, source} or raw spec
+    source = body.get("source", None)
+    await wb_db.set_agent_api_spec(agent_id, spec, source=source)
+    paths = spec.get("paths", {}) if isinstance(spec, dict) else spec
+    count = len(paths) if isinstance(paths, (dict, list)) else 0
+    return {"ok": True, "endpoint_count": count}
 
 
 @router.post("/agents/{agent_id}/test-connection")

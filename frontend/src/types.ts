@@ -15,6 +15,7 @@ export interface Agent {
   agent_config?: AgentConfig | null;
   has_api_key: boolean;
   has_api_spec: boolean;
+  api_spec_source?: string | null;
   api_spec_endpoint_count?: number;
   api_endpoints?: { method: string; path: string; summary: string }[];
   status: string;

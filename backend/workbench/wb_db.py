@@ -126,6 +126,17 @@ async def ensure_schema():
             if row[0] > 0:
                 await cur.execute("ALTER TABLE wb_use_cases DROP COLUMN priority")
 
+            # Add api_spec_source column if missing
+            await cur.execute("""
+                SELECT COUNT(*) FROM information_schema.COLUMNS
+                WHERE TABLE_SCHEMA = DATABASE()
+                  AND TABLE_NAME = 'wb_agents'
+                  AND COLUMN_NAME = 'api_spec_source'
+            """)
+            row = await cur.fetchone()
+            if row[0] == 0:
+                await cur.execute("ALTER TABLE wb_agents ADD COLUMN api_spec_source TEXT AFTER api_spec")
+
             # Add agent_role column if missing
             await cur.execute("""
                 SELECT COUNT(*) FROM information_schema.COLUMNS
@@ -244,12 +255,13 @@ async def get_agent_api_key_enc(agent_id: str) -> str | None:
     return row["api_key_enc"] if row else None
 
 
-async def set_agent_api_spec(agent_id: str, spec: dict):
+async def set_agent_api_spec(agent_id: str, spec, source: str | None = None):
     pool = await get_pool()
     async with pool.acquire() as conn:
         async with conn.cursor() as cur:
-            await cur.execute("UPDATE wb_agents SET api_spec = %s, status = 'api_documented' WHERE id = %s",
-                              (json.dumps(spec), agent_id))
+            await cur.execute(
+                "UPDATE wb_agents SET api_spec = %s, api_spec_source = %s, status = 'api_documented' WHERE id = %s",
+                (json.dumps(spec), source, agent_id))
 
 
 async def update_agent_status(agent_id: str, status: str):

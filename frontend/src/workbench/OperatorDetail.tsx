@@ -84,6 +84,16 @@ export default function OperatorDetail() {
   });
   const [configLoaded, setConfigLoaded] = useState(false);
 
+  // Load saved spec source into textarea
+  const specSourceLoaded = useRef(false);
+  useEffect(() => {
+    if (!agent || specSourceLoaded.current) return;
+    if (agent.api_spec_source) {
+      setSpecInput(agent.api_spec_source === "json" ? "" : agent.api_spec_source);
+      specSourceLoaded.current = true;
+    }
+  }, [agent]);
+
   // Load config from DB or generate defaults
   useEffect(() => {
     if (!agent || configLoaded) return;
@@ -140,8 +150,7 @@ export default function OperatorDetail() {
       setSpecLoading(true);
       try {
         const spec = await fetchUrl(input);
-        await uploadSpec.mutateAsync({ id: id!, spec });
-        setSpecInput("");
+        await uploadSpec.mutateAsync({ id: id!, spec, source: input });
       } catch (e: unknown) {
         alert("Failed to fetch spec from URL: " + (e instanceof Error ? e.message : "Unknown error"));
       } finally {
@@ -153,8 +162,7 @@ export default function OperatorDetail() {
     // Raw JSON
     try {
       const spec = JSON.parse(input);
-      await uploadSpec.mutateAsync({ id: id!, spec });
-      setSpecInput("");
+      await uploadSpec.mutateAsync({ id: id!, spec, source: input.length > 500 ? "json" : input });
     } catch {
       alert("Invalid JSON.\n\nPaste either:\n• A Swagger/OpenAPI JSON spec\n• A URL to a swagger.json file (e.g. https://petstore.swagger.io/v2/swagger.json)");
     }
