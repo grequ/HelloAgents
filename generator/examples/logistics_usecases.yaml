@@ -1,0 +1,187 @@
+# =============================================================================
+# AGENT USE CASES INPUT FILE
+# =============================================================================
+# Fill this out for each legacy system you want to wrap with an agent.
+# Describe what humans do today — the generator will turn these into
+# tool definitions and an agent spec.
+# =============================================================================
+
+agent_name: "Logistics Agent"
+domain: "Shipping, tracking, delivery, and warehouse operations"
+owner_team: "Logistics & Fulfillment"
+
+# Which legacy system(s) does this agent wrap?
+systems:
+  - name: "SAP WMS"
+    type: "REST API"
+    api_spec: "./sap_wms_openapi.json"  # path to Postman collection or OpenAPI spec
+  - name: "FastShip Carrier API"
+    type: "REST API"
+    api_spec: "./fastship_openapi.json"
+  - name: "Customs Broker Portal"
+    type: "REST API"
+    api_spec: "./customs_openapi.json"
+
+# =============================================================================
+# USE CASES
+# =============================================================================
+# For each use case, describe:
+#   goal:       What the user/agent is trying to accomplish
+#   trigger:    What kind of question or event triggers this
+#   input:      What information is available/provided
+#   steps:      What a human does today (which screens, which API calls)
+#   output:     What the result looks like
+#   system:     Which legacy system(s) are involved
+#   frequency:  How often this happens (helps prioritize)
+#   write:      Does this change data? (true/false)
+# =============================================================================
+
+use_cases:
+
+  # ---------- TRACKING ----------
+
+  - id: UC-001
+    goal: "Check where a package is right now"
+    trigger: "Customer asks 'where is my order?'"
+    input:
+      - order_id: "The order identifier (e.g. ORD-001)"
+      - tracking_number: "Optional — if customer provides it"
+    steps:
+      - "Look up order in SAP WMS to get tracking number and carrier"
+      - "Call carrier tracking API with tracking number"
+      - "Return current location, last scan event, and ETA"
+    output:
+      - current_location: "City/hub where package was last scanned"
+      - last_event: "Description of last scan (e.g. 'Departed Berlin Hub')"
+      - eta: "Estimated delivery date"
+      - carrier: "Carrier name"
+      - tracking_number: "Tracking reference"
+    systems: ["SAP WMS", "FastShip Carrier API"]
+    frequency: "~200/day"
+    write: false
+
+  - id: UC-002
+    goal: "Get full shipment history timeline"
+    trigger: "Customer asks for tracking details or delivery proof"
+    input:
+      - tracking_number: "The carrier tracking number"
+    steps:
+      - "Call carrier API for full scan history"
+      - "Format as chronological timeline"
+    output:
+      - history: "List of {location, timestamp, event} entries"
+      - delivered: "true/false"
+      - signed_by: "Name if delivered and signed"
+    systems: ["FastShip Carrier API"]
+    frequency: "~50/day"
+    write: false
+
+  # ---------- WAREHOUSE ----------
+
+  - id: UC-003
+    goal: "Check if an order has been packed and handed to carrier"
+    trigger: "Customer asks 'has my order shipped yet?'"
+    input:
+      - order_id: "The order identifier"
+    steps:
+      - "Query SAP WMS for pick/pack status"
+      - "Check if handover to carrier has happened"
+      - "If not handed over, estimate when it will be"
+    output:
+      - pick_status: "pending | in_progress | completed"
+      - pack_status: "pending | in_progress | completed"
+      - handover_time: "ISO timestamp or null"
+      - warehouse: "Which warehouse is processing"
+    systems: ["SAP WMS"]
+    frequency: "~100/day"
+    write: false
+
+  - id: UC-004
+    goal: "Check inventory levels for an item"
+    trigger: "Agent needs to know if item is in stock before promising reshipment"
+    input:
+      - sku: "Product SKU"
+      - warehouse_region: "Optional — specific warehouse"
+    steps:
+      - "Query SAP WMS inventory endpoint"
+      - "Return stock levels per warehouse"
+    output:
+      - total_stock: "Number available"
+      - by_warehouse: "Breakdown per location"
+      - restock_eta: "When next batch arrives, if out of stock"
+    systems: ["SAP WMS"]
+    frequency: "~30/day"
+    write: false
+
+  # ---------- CUSTOMS ----------
+
+  - id: UC-005
+    goal: "Check customs clearance status for international shipment"
+    trigger: "Customer asks about delay, or automated check for stuck shipments"
+    input:
+      - tracking_number: "The carrier tracking number"
+    steps:
+      - "Query customs broker API with tracking number"
+      - "Return clearance status, any holds, duties"
+    output:
+      - clearance_status: "pending | cleared | held | rejected"
+      - duties_amount: "Amount owed (0 for EU-internal)"
+      - hold_reason: "If held — why"
+      - clearance_date: "When it cleared, if applicable"
+    systems: ["Customs Broker Portal"]
+    frequency: "~20/day"
+    write: false
+
+  - id: UC-006
+    goal: "Request expedited customs clearance"
+    trigger: "VIP customer or SLA breach on international order"
+    input:
+      - tracking_number: "The carrier tracking number"
+      - priority_reason: "Why this needs expediting"
+    steps:
+      - "Submit priority request to customs broker"
+      - "Get confirmation and new estimated clearance time"
+    output:
+      - request_id: "Priority request reference"
+      - estimated_clearance: "New expected clearance time"
+    systems: ["Customs Broker Portal"]
+    frequency: "~5/day"
+    write: true
+
+  # ---------- ACTIONS ----------
+
+  - id: UC-007
+    goal: "Reroute a package to a different address"
+    trigger: "Customer requests delivery to a new address before it arrives"
+    input:
+      - tracking_number: "The tracking number"
+      - new_address: "New delivery address"
+    steps:
+      - "Check carrier API if reroute is still possible (not out for delivery)"
+      - "Submit reroute request to carrier"
+      - "Confirm new delivery estimate"
+    output:
+      - reroute_possible: "true/false"
+      - new_eta: "Updated delivery estimate"
+      - reroute_fee: "Any additional cost"
+    systems: ["FastShip Carrier API"]
+    frequency: "~10/day"
+    write: true
+
+  - id: UC-008
+    goal: "Schedule a redelivery after failed attempt"
+    trigger: "Customer wasn't home, wants to pick a new delivery slot"
+    input:
+      - tracking_number: "The tracking number"
+      - preferred_date: "Customer's preferred date"
+      - preferred_time_window: "Morning/Afternoon/Evening"
+    steps:
+      - "Check carrier API for available delivery slots"
+      - "Book the requested slot"
+      - "Confirm booking"
+    output:
+      - confirmed_slot: "Date and time window"
+      - booking_reference: "Carrier booking ID"
+    systems: ["FastShip Carrier API"]
+    frequency: "~15/day"
+    write: true

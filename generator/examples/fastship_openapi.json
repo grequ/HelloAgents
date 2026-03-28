@@ -1,0 +1,188 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "FastShip Carrier API",
+    "version": "2.1.0",
+    "description": "Carrier tracking and shipment management API"
+  },
+  "servers": [
+    { "url": "https://api.fastship.example.com/v2" }
+  ],
+  "paths": {
+    "/shipments/{tracking_number}": {
+      "get": {
+        "operationId": "getShipment",
+        "summary": "Get shipment status and current location",
+        "parameters": [
+          {
+            "name": "tracking_number",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Shipment details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "tracking_number": { "type": "string" },
+                    "status": { "type": "string", "enum": ["pending", "picked_up", "in_transit", "out_for_delivery", "delivered", "returned"] },
+                    "carrier": { "type": "string" },
+                    "origin": { "type": "string" },
+                    "destination": { "type": "string" },
+                    "estimated_delivery": { "type": "string", "format": "date" },
+                    "last_scan": {
+                      "type": "object",
+                      "properties": {
+                        "location": { "type": "string" },
+                        "timestamp": { "type": "string", "format": "date-time" },
+                        "event": { "type": "string" }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/shipments/{tracking_number}/history": {
+      "get": {
+        "operationId": "getShipmentHistory",
+        "summary": "Get full tracking scan history",
+        "parameters": [
+          {
+            "name": "tracking_number",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Scan history",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "tracking_number": { "type": "string" },
+                    "events": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "location": { "type": "string" },
+                          "timestamp": { "type": "string", "format": "date-time" },
+                          "event": { "type": "string" }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/shipments/{tracking_number}/reroute": {
+      "post": {
+        "operationId": "rerouteShipment",
+        "summary": "Request package reroute to a different address",
+        "parameters": [
+          {
+            "name": "tracking_number",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "new_address": { "type": "string" },
+                  "contact_phone": { "type": "string" }
+                },
+                "required": ["new_address"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Reroute result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean" },
+                    "new_eta": { "type": "string", "format": "date" },
+                    "reroute_fee": { "type": "number" },
+                    "reason": { "type": "string" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/shipments/{tracking_number}/redeliver": {
+      "post": {
+        "operationId": "scheduleRedelivery",
+        "summary": "Schedule redelivery after failed attempt",
+        "parameters": [
+          {
+            "name": "tracking_number",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "preferred_date": { "type": "string", "format": "date" },
+                  "time_window": { "type": "string", "enum": ["morning", "afternoon", "evening"] }
+                },
+                "required": ["preferred_date"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Redelivery booking",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "booking_id": { "type": "string" },
+                    "confirmed_date": { "type": "string", "format": "date" },
+                    "confirmed_window": { "type": "string" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

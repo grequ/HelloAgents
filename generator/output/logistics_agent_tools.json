@@ -1,0 +1,171 @@
+[
+  {
+    "name": "track_package_current_status",
+    "description": "Get current location and status of a package. Can lookup by order ID (will find tracking number from WMS) or directly by tracking number. Use this when customer asks 'where is my package' or 'what's the status of my order'.",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "order_id": {
+          "type": "string",
+          "description": "Order identifier like ORD-001. Use this if customer provides order number."
+        },
+        "tracking_number": {
+          "type": "string",
+          "description": "Carrier tracking number. Use this if customer provides tracking number directly."
+        }
+      },
+      "anyOf": [
+        {
+          "required": [
+            "order_id"
+          ]
+        },
+        {
+          "required": [
+            "tracking_number"
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "name": "get_shipment_history",
+    "description": "Get complete tracking timeline for a shipment including all scan events, delivery proof, and signature info. Use when customer asks for detailed tracking history or delivery confirmation.",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "tracking_number": {
+          "type": "string",
+          "description": "The carrier tracking number"
+        }
+      },
+      "required": [
+        "tracking_number"
+      ]
+    }
+  },
+  {
+    "name": "check_order_fulfillment_status",
+    "description": "Check if an order has been picked, packed, and handed over to carrier. Use when customer asks 'has my order shipped yet' or wants to know warehouse processing status.",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "order_id": {
+          "type": "string",
+          "description": "The order identifier like ORD-001"
+        }
+      },
+      "required": [
+        "order_id"
+      ]
+    }
+  },
+  {
+    "name": "check_inventory_levels",
+    "description": "Check current stock levels for a product SKU. Use before promising reshipments or when customer asks about product availability.",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "sku": {
+          "type": "string",
+          "description": "Product SKU to check inventory for"
+        },
+        "warehouse_region": {
+          "type": "string",
+          "description": "Optional specific warehouse region to check"
+        }
+      },
+      "required": [
+        "sku"
+      ]
+    }
+  },
+  {
+    "name": "check_customs_status",
+    "description": "Check customs clearance status for international shipments. Use when customer asks about delays on international orders or when tracking shows customs processing.",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "tracking_number": {
+          "type": "string",
+          "description": "The carrier tracking number for the international shipment"
+        }
+      },
+      "required": [
+        "tracking_number"
+      ]
+    }
+  },
+  {
+    "name": "expedite_customs_clearance",
+    "description": "Request priority customs processing for VIP customers or SLA breaches. This is a write operation that creates an expedite request.",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "tracking_number": {
+          "type": "string",
+          "description": "The carrier tracking number"
+        },
+        "priority_reason": {
+          "type": "string",
+          "description": "Business justification for expediting (e.g., 'VIP customer', 'SLA breach')"
+        }
+      },
+      "required": [
+        "tracking_number",
+        "priority_reason"
+      ]
+    }
+  },
+  {
+    "name": "reroute_package",
+    "description": "Request to change delivery address for a package that hasn't been delivered yet. This is a write operation that attempts to reroute the shipment.",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "tracking_number": {
+          "type": "string",
+          "description": "The carrier tracking number"
+        },
+        "new_address": {
+          "type": "string",
+          "description": "Complete new delivery address"
+        }
+      },
+      "required": [
+        "tracking_number",
+        "new_address"
+      ]
+    }
+  },
+  {
+    "name": "schedule_redelivery",
+    "description": "Schedule a new delivery attempt after a failed delivery. This is a write operation that books a delivery slot.",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "tracking_number": {
+          "type": "string",
+          "description": "The carrier tracking number"
+        },
+        "preferred_date": {
+          "type": "string",
+          "description": "Preferred delivery date in YYYY-MM-DD format"
+        },
+        "preferred_time_window": {
+          "type": "string",
+          "enum": [
+            "morning",
+            "afternoon",
+            "evening"
+          ],
+          "description": "Preferred time window for delivery"
+        }
+      },
+      "required": [
+        "tracking_number",
+        "preferred_date"
+      ]
+    }
+  }
+]
