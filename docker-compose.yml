@@ -1,0 +1,18 @@
+# Not needed if you already have MySQL running.
+# Provided as a fallback if you want a fresh instance.
+services:
+  mysql:
+    image: mysql:8.0
+    environment:
+      MYSQL_ROOT_PASSWORD: kb_root_pass
+      MYSQL_USER: kb_root
+      MYSQL_PASSWORD: kb_root_pass
+      MYSQL_DATABASE: helloagents
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysqldata:/var/lib/mysql
+      - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql
+
+volumes:
+  mysqldata:
