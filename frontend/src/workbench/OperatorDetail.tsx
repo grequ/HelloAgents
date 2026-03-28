@@ -128,12 +128,35 @@ export default function OperatorDetail() {
 
   // --- Other handlers ---
 
+  const [specLoading, setSpecLoading] = useState(false);
+
   const handleUploadSpec = async () => {
+    const input = specInput.trim();
+    if (!input) return;
+
+    // Detect URL — fetch the JSON from it
+    if (input.startsWith("http://") || input.startsWith("https://")) {
+      setSpecLoading(true);
+      try {
+        const resp = await fetch(input);
+        if (!resp.ok) { alert(`Fetch failed: ${resp.status} ${resp.statusText}`); return; }
+        const spec = await resp.json();
+        await uploadSpec.mutateAsync({ id: id!, spec });
+        setSpecInput("");
+      } catch (e: unknown) {
+        alert("Failed to fetch or parse: " + (e instanceof Error ? e.message : "Unknown error"));
+      } finally {
+        setSpecLoading(false);
+      }
+      return;
+    }
+
+    // Otherwise parse as JSON
     try {
-      const spec = JSON.parse(specInput);
+      const spec = JSON.parse(input);
       await uploadSpec.mutateAsync({ id: id!, spec });
       setSpecInput("");
-    } catch { alert("Invalid JSON"); }
+    } catch { alert("Invalid JSON — paste raw JSON or a URL to an OpenAPI spec"); }
   };
 
   const handleGenerate = async () => {
@@ -207,8 +230,12 @@ export default function OperatorDetail() {
                 <button className={btnGhost} onClick={async () => { if (apiKeyInput) { await setApiKey.mutateAsync({ id: id!, apiKey: apiKeyInput }); setApiKeyInput(""); } }}>{isMcp ? "Set Token" : "Set Key"}</button>
               </div>
               <div className="flex gap-2">
-                <textarea className={`${inp} flex-1`} placeholder={isMcp ? "Paste MCP tool definitions JSON (array of tools with name, description, inputSchema)..." : "Paste OpenAPI/Swagger JSON spec..."} rows={3} value={specInput} onChange={(e) => setSpecInput(e.target.value)} />
-                <button className={`${btnGhost} self-start`} onClick={handleUploadSpec}>{isMcp ? "Upload Tools" : "Upload Spec"}</button>
+                <textarea className={`${inp} flex-1`}
+                  placeholder={isMcp ? "Paste MCP tool definitions JSON..." : "Paste OpenAPI JSON or a URL (e.g. https://api.example.com/swagger.json)"}
+                  rows={2} value={specInput} onChange={(e) => setSpecInput(e.target.value)} />
+                <button className={`${btnGhost} self-start`} onClick={handleUploadSpec} disabled={specLoading}>
+                  {specLoading ? "Fetching..." : isMcp ? "Upload Tools" : "Upload Spec"}
+                </button>
               </div>
               {!isMcp && (
                 <div className="flex items-center gap-3">
