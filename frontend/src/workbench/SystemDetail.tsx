@@ -72,16 +72,7 @@ function generateRoleFromUseCases(sys: System, ucs: UseCase[]): string {
   return role;
 }
 
-// --- Shared styles ---
-const btn = "inline-flex items-center justify-center rounded-lg text-sm font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed";
-const btnSz = "px-4 py-2";
-const btnPrimary = `${btn} ${btnSz} bg-tedee-cyan text-tedee-navy hover:bg-hover-cyan`;
-const btnSecondary = `${btn} ${btnSz} border border-gray-200 text-gray-600 hover:bg-gray-50`;
-const btnDanger = `${btn} ${btnSz} bg-red-500 text-white hover:bg-red-600`;
-const btnGhost = "inline-flex items-center justify-center rounded-md px-3 py-1.5 text-xs font-medium transition-colors";
-const btnGhostDefault = `${btnGhost} bg-gray-100 text-gray-700 hover:bg-gray-200`;
-const btnGhostDanger = `${btnGhost} text-red-600 hover:bg-red-50`;
-const inp = "w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-tedee-cyan focus:ring-1 focus:ring-tedee-cyan/20";
+import { btnPrimary, btnSecondary, btnDanger, btnGhost as btnGhostDefault, btnGhostDanger, btnGhostCyan, inp } from "./ui";
 
 // --- Component ---
 
@@ -318,8 +309,7 @@ export default function SystemDetail() {
       {/* Header */}
       <div className="flex items-start justify-between">
         <div>
-          <Link to="/workbench" className="text-xs text-tedee-cyan hover:underline">&larr; Back</Link>
-          <h2 className="text-xl font-bold text-text-primary mt-1">{system.name}</h2>
+          <h2 className="text-xl font-bold text-text-primary">{system.name}</h2>
           <p className="text-sm text-gray-500">{system.description}</p>
         </div>
         <div className="flex items-center gap-2">
@@ -510,7 +500,7 @@ export default function SystemDetail() {
               </div>
               <p className="text-xs text-gray-500 mb-2">{uc.trigger_text || uc.description}</p>
               <div className="flex gap-2">
-                <Link to={`/workbench/systems/${id}/usecases/${uc.id}`} className={`${btnGhost} bg-tedee-cyan/10 text-tedee-navy hover:bg-tedee-cyan/20`}>Open Playground</Link>
+                <Link to={`/workbench/systems/${id}/usecases/${uc.id}`} className={btnGhostCyan}>Open Playground</Link>
                 <button className={btnGhostDanger} onClick={async () => { if (confirm("Delete this use case?")) await deleteUc.mutateAsync(uc.id); }}>Delete</button>
               </div>
             </div>

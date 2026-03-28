@@ -1,4 +1,4 @@
-import { NavLink, Outlet, useLocation } from "react-router-dom";
+import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 
 const NAV_ITEMS = [
   {
@@ -24,8 +24,25 @@ function pageTitle(pathname: string): string {
   return "Workbench";
 }
 
+function parentPath(pathname: string): { to: string; label: string } | null {
+  if (pathname.includes("/usecases/")) {
+    // /workbench/systems/:id/usecases/:ucId → back to system
+    const sysId = pathname.split("/systems/")[1]?.split("/")[0];
+    return sysId ? { to: `/workbench/systems/${sysId}`, label: "System Detail" } : null;
+  }
+  if (pathname.match(/\/systems\/[^/]+$/)) {
+    return { to: "/workbench", label: "Dashboard" };
+  }
+  if (pathname.match(/\/agents\/[^/]+$/)) {
+    return { to: "/workbench/agents", label: "Agent Specs" };
+  }
+  return null;
+}
+
 export default function WorkbenchLayout() {
   const { pathname } = useLocation();
+  const navigate = useNavigate();
+  const parent = parentPath(pathname);
 
   return (
     <div className="flex h-screen overflow-hidden font-sans">
@@ -69,7 +86,21 @@ export default function WorkbenchLayout() {
       {/* Main area */}
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Header bar */}
-        <header className="h-14 shrink-0 bg-white border-b border-gray-200 flex items-center justify-between px-6">
+        <header className="h-14 shrink-0 bg-white border-b border-gray-200 flex items-center px-6 gap-3">
+          {parent && (
+            <>
+              <button
+                onClick={() => navigate(parent.to)}
+                className="flex items-center gap-1.5 text-sm text-gray-400 hover:text-tedee-cyan transition-colors"
+              >
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" className="shrink-0">
+                  <path d="M10 12L6 8L10 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+                {parent.label}
+              </button>
+              <span className="text-gray-300">/</span>
+            </>
+          )}
           <h1 className="text-xl font-bold text-tedee-navy">
             {pageTitle(pathname)}
           </h1>

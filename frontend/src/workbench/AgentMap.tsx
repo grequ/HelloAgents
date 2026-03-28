@@ -191,8 +191,8 @@ export default function AgentMap() {
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-auto p-4">
         <svg width={svgWidth} height={svgHeight} className="block" style={{ minWidth: svgWidth, minHeight: svgHeight }}>
           <defs>
-            <marker id="arrow" markerWidth="12" markerHeight="8" refX="11" refY="4" orient="auto">
-              <polygon points="0 0, 12 4, 0 8" fill="#34CFFD" />
+            <marker id="arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+              <polygon points="0 0.5, 7 3, 0 5.5" fill="#94a3b8" />
             </marker>
             <filter id="cardShadow" x="-4%" y="-4%" width="108%" height="112%">
               <feDropShadow dx="0" dy="2" stdDeviation="4" floodColor="#000" floodOpacity="0.08" />
@@ -221,7 +221,7 @@ export default function AgentMap() {
               const ey = to.y + cardHeight(to) / 2;
               return (
                 <line key={i} x1={sx} y1={sy} x2={ex} y2={ey}
-                  stroke="#34CFFD" strokeWidth={2.5} markerEnd="url(#arrow)" />
+                  stroke="#94a3b8" strokeWidth={1.5} markerEnd="url(#arrow)" />
               );
             }
 
@@ -230,7 +230,7 @@ export default function AgentMap() {
             return (
               <path key={i}
                 d={`M ${fromCX} ${fromBottom} C ${fromCX} ${midY}, ${toCX} ${midY}, ${toCX} ${toTop}`}
-                fill="none" stroke="#34CFFD" strokeWidth={2.5} markerEnd="url(#arrow)" />
+                fill="none" stroke="#94a3b8" strokeWidth={1.5} markerEnd="url(#arrow)" />
             );
           })}
 
@@ -297,7 +297,7 @@ export default function AgentMap() {
       {/* Legend */}
       <div className="flex items-center gap-6 mt-4 text-xs text-gray-500">
         <div className="flex items-center gap-2">
-          <svg width="32" height="8"><line x1="0" y1="4" x2="28" y2="4" stroke="#34CFFD" strokeWidth={2.5} /><polygon points="28,0 32,4 28,8" fill="#34CFFD" /></svg>
+          <svg width="32" height="8"><line x1="0" y1="4" x2="26" y2="4" stroke="#94a3b8" strokeWidth={1.5} /><polygon points="26,1 32,4 26,7" fill="#94a3b8" /></svg>
           <span>calls / asks</span>
         </div>
         <div className="flex items-center gap-2">

@@ -1,8 +1,25 @@
-import { useState, useEffect } from "react";
-import { useParams, Link, useNavigate } from "react-router-dom";
+import { useState, useEffect, useRef, useCallback, type RefObject } from "react";
+import { useParams, useNavigate } from "react-router-dom";
 import type { Endpoint } from "../types";
 import { useSystem, useUseCase, useDiscover, useRunTest, useSaveDiscovery, useDeleteUseCase } from "./queries";
 import { getUseCase as fetchUseCase } from "./api";
+import { btnPrimary, btnDanger, btnSuccess, btnGhost, btnGhostDanger, inp } from "./ui";
+
+function AutoTextarea({ value, onChange, placeholder, className }: {
+  value: string; onChange: (v: string) => void; placeholder?: string; className?: string;
+}) {
+  const ref = useRef<HTMLTextAreaElement>(null);
+  const resize = useCallback(() => {
+    const el = ref.current;
+    if (el) { el.style.height = "auto"; el.style.height = Math.max(60, el.scrollHeight) + "px"; }
+  }, []);
+  useEffect(() => { resize(); }, [value, resize]);
+  return (
+    <textarea ref={ref} className={className} value={value}
+      onChange={(e) => onChange(e.target.value)} onInput={resize}
+      placeholder={placeholder} rows={1} style={{ overflow: "hidden", resize: "none" }} />
+  );
+}
 
 function guessTestInput(userInput?: string): string {
   if (!userInput) return "{\n  \n}";
@@ -93,9 +110,7 @@ export default function Playground() {
     }
   };
 
-  const inp = "w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-tedee-cyan";
-  const btnPrimary = "px-4 py-2 rounded-lg bg-tedee-cyan text-tedee-navy font-semibold text-sm hover:bg-hover-cyan disabled:opacity-50 transition-colors";
-  const btnSm = "px-3 py-1.5 rounded-md text-xs font-medium";
+  // (styles imported from ./ui)
 
   if (!system || !uc) return <p className="text-sm text-gray-500">Loading...</p>;
 
@@ -106,14 +121,11 @@ export default function Playground() {
       {/* Header */}
       <div className="flex items-start justify-between mb-5">
         <div>
-          <Link to={`/workbench/systems/${systemId}`} className="text-xs text-tedee-cyan hover:underline">
-            &larr; {system.name}
-          </Link>
-          <h2 className="text-xl font-bold text-text-primary mt-1">{uc.name}</h2>
+          <h2 className="text-xl font-bold text-text-primary">{uc.name}</h2>
           <span className="text-[11px] px-2 py-0.5 rounded-full bg-gray-200 text-gray-700 font-medium">{uc.status}</span>
         </div>
         <button
-          className="px-4 py-2 rounded-lg bg-red-500 text-white font-semibold text-sm hover:bg-red-600 transition-colors"
+          className={btnDanger}
           onClick={async () => { if (confirm("Delete this use case?")) { await deleteUcMut.mutateAsync(ucId!); nav(`/workbench/systems/${systemId}`); } }}
         >
           Delete Use Case
@@ -169,7 +181,7 @@ export default function Playground() {
               <h3 className="font-semibold text-text-primary text-sm">Self-Discovery</h3>
               <div className="flex gap-2">
                 <button
-                  className={`${btnSm} bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50`}
+                  className={btnSuccess}
                   onClick={handleSaveDiscovery}
                   disabled={!dirty || saveDiscMut.isPending}
                 >
@@ -189,7 +201,7 @@ export default function Playground() {
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
                   <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Mapped Endpoints</h4>
-                  <button className={`${btnSm} bg-gray-100 text-gray-700 hover:bg-gray-200`} onClick={() => { setEndpoints([...endpoints, { method: "GET", path: "/", purpose: "", parameters: {}, extracts: [] }]); setDirty(true); }}>
+                  <button className={btnGhost} onClick={() => { setEndpoints([...endpoints, { method: "GET", path: "/", purpose: "", parameters: {}, extracts: [] }]); setDirty(true); }}>
                     + Add Endpoint
                   </button>
                 </div>
@@ -208,7 +220,7 @@ export default function Playground() {
 
                 <div>
                   <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Agent Behavior</h4>
-                  <textarea className={inp} rows={3} value={behavior} onChange={(e) => { setBehavior(e.target.value); setDirty(true); }} placeholder="Describe how the agent chains these calls..." />
+                  <AutoTextarea className={inp} value={behavior} onChange={(v) => { setBehavior(v); setDirty(true); }} placeholder="Describe how the agent chains these calls..." />
                 </div>
 
                 {toolDef && (

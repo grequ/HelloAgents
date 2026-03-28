@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
-import { useParams, useNavigate, Link } from "react-router-dom";
+import { useParams, useNavigate } from "react-router-dom";
 import { useSpec, useUpdateSpec, useDeleteSpec } from "./queries";
+import { btnPrimary, btnSecondary, btnDanger, btnSuccess } from "./ui";
 
 const TABS = [
   { key: "spec", label: "Specification" },
@@ -96,34 +97,19 @@ export default function AgentSpecView() {
       {/* Header */}
       <div className="flex items-start justify-between mb-5">
         <div>
-          <Link to="/workbench/agents" className="text-xs text-tedee-cyan hover:underline">
-            &larr; All Specs
-          </Link>
-          <h2 className="text-xl font-bold text-text-primary mt-1">{spec.name}</h2>
+          <h2 className="text-xl font-bold text-text-primary">{spec.name}</h2>
           <span className="text-[11px] px-2 py-0.5 rounded-full bg-gray-200 text-gray-700 font-medium">
             {spec.status}
           </span>
         </div>
         <div className="flex gap-2">
-          <button
-            className="px-4 py-2 rounded-lg bg-emerald-600 text-white font-semibold text-sm hover:bg-emerald-700 disabled:opacity-50 transition-colors"
-            onClick={handleSave}
-            disabled={!dirty || updateSpec.isPending}
-          >
+          <button className={btnSuccess} onClick={handleSave} disabled={!dirty || updateSpec.isPending}>
             {updateSpec.isPending ? "Saving..." : "Save Changes"}
           </button>
-          <button
-            className="px-4 py-2 rounded-lg bg-tedee-navy text-white font-semibold text-sm hover:bg-tedee-navy/80 transition-colors"
-            onClick={handleCopyMarkdown}
-          >
+          <button className={btnSecondary} onClick={handleCopyMarkdown}>
             {copied ? "Copied!" : "Copy .md to Clipboard"}
           </button>
-          <button
-            className="px-4 py-2 rounded-lg bg-red-500 text-white font-semibold text-sm hover:bg-red-600 transition-colors"
-            onClick={handleDelete}
-          >
-            Delete
-          </button>
+          <button className={btnDanger} onClick={handleDelete}>Delete</button>
         </div>
       </div>
 
