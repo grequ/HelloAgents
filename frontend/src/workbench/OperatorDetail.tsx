@@ -92,6 +92,7 @@ export default function OperatorDetail() {
 
   // Spec input
   const [specInput, setSpecInput] = useState("");
+  const [pendingSpec, setPendingSpec] = useState<{ spec: unknown; source: string } | null>(null);
 
   // Load saved spec source into textarea
   const specSourceLoaded = useRef(false);
@@ -143,6 +144,11 @@ export default function OperatorDetail() {
         setApiKeyInput("");
         setEditingKey(false);
       }
+      // Save spec if pending
+      if (pendingSpec) {
+        await uploadSpec.mutateAsync({ id: id!, spec: pendingSpec.spec, source: pendingSpec.source });
+        setPendingSpec(null);
+      }
       // Save tool edits
       for (const t of tools) {
         const edit = toolEdits[t.id];
@@ -164,6 +170,8 @@ export default function OperatorDetail() {
     setEditDesc(agent.description || "");
     setApiKeyInput("");
     setEditingKey(false);
+    setPendingSpec(null);
+    if (agent.api_spec_source) setSpecInput(agent.api_spec_source); else setSpecInput("");
     const edits: Record<string, ToolEdit> = {};
     for (const t of tools) edits[t.id] = { name: t.name, description: t.description };
     setToolEdits(edits);
@@ -178,12 +186,13 @@ export default function OperatorDetail() {
     const input = specInput.trim();
     if (!input) return;
 
-    // URL → fetch via backend (avoids CORS)
+    // URL → fetch via backend (avoids CORS), store locally
     if (input.startsWith("http://") || input.startsWith("https://")) {
       setSpecLoading(true);
       try {
         const spec = await fetchUrl(input);
-        await uploadSpec.mutateAsync({ id: id!, spec, source: input });
+        setPendingSpec({ spec, source: input });
+        setDirty(true);
       } catch (e: unknown) {
         alert("Failed to fetch spec from URL: " + (e instanceof Error ? e.message : "Unknown error"));
       } finally {
@@ -192,10 +201,11 @@ export default function OperatorDetail() {
       return;
     }
 
-    // Raw JSON
+    // Raw JSON → parse and store locally
     try {
       const spec = JSON.parse(input);
-      await uploadSpec.mutateAsync({ id: id!, spec, source: input });
+      setPendingSpec({ spec, source: input });
+      setDirty(true);
     } catch {
       alert("Invalid JSON.\n\nPaste either:\n• A Swagger/OpenAPI JSON spec\n• A URL to a swagger.json file (e.g. https://petstore.swagger.io/v2/swagger.json)");
     }
@@ -295,12 +305,14 @@ export default function OperatorDetail() {
                   placeholder={isMcp ? "Paste MCP tool definitions JSON..." : "Paste Swagger/OpenAPI JSON or a URL (e.g. https://petstore.swagger.io/v2/swagger.json)"}
                   rows={2} value={specInput} onChange={(e) => setSpecInput(e.target.value)} />
                 <button className={`${btnGhost} self-start`} onClick={handleUploadSpec} disabled={specLoading}>
-                  {specLoading ? "Fetching..." : isMcp ? "Upload Tools" : "Upload Spec"}
+                  {specLoading ? "Fetching..." : pendingSpec ? "Parsed" : isMcp ? "Load Tools" : "Load Spec"}
                 </button>
               </div>
               {!isMcp && (
                 <div className="flex items-center gap-3">
-                  <button className={btnGhost} onClick={() => testConn.mutate(id!)} disabled={testConn.isPending}>Test Connection</button>
+                  <button className={btnGhost} onClick={() => testConn.mutate(id!)} disabled={testConn.isPending}>
+                    {testConn.isPending ? "Testing..." : "Test & Discover Endpoints"}
+                  </button>
                   {testConn.data && <span className={`text-xs font-medium ${testConn.data.ok ? "text-green-600" : "text-red-600"}`}>{testConn.data.ok ? `Connected (${testConn.data.status_code})` : `Failed: ${testConn.data.error}`}</span>}
                 </div>
               )}
