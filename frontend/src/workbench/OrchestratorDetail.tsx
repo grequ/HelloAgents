@@ -52,6 +52,7 @@ export default function OrchestratorDetail() {
   const saveInteractionsMut = useSaveInteractions();
 
   const [saved, setSaved] = useState(false);
+  const [dirty, setDirty] = useState(false);
 
   // --- Config state (Section B: Behavior) ---
   const [config, setConfig] = useState({
@@ -88,6 +89,13 @@ export default function OrchestratorDetail() {
     setInteractionsLoaded(true);
   }, [interactions, interactionsLoaded]);
 
+  // beforeunload warning
+  useEffect(() => {
+    const handler = (e: BeforeUnloadEvent) => { if (dirty) { e.preventDefault(); } };
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
+  }, [dirty]);
+
   // --- Available operators (exclude self and already-connected) ---
   const availableOperators = operators.filter(
     (op) => op.id !== id && !connectedOps.some((c) => c.target_agent_id === op.id)
@@ -99,6 +107,7 @@ export default function OrchestratorDetail() {
     if (availableOperators.length === 0) return;
     const op = availableOperators[0];
     setConnectedOps([...connectedOps, { target_agent_id: op.id, target_agent_name: op.name, use_case_ids: [] }]);
+    setDirty(true);
   }
 
   function updateOperator(idx: number, opId: string) {
@@ -107,10 +116,12 @@ export default function OrchestratorDetail() {
     const updated = [...connectedOps];
     updated[idx] = { target_agent_id: op.id, target_agent_name: op.name, use_case_ids: [] };
     setConnectedOps(updated);
+    setDirty(true);
   }
 
   function removeOperator(idx: number) {
     setConnectedOps(connectedOps.filter((_, i) => i !== idx));
+    setDirty(true);
   }
 
   // --- Save ---
@@ -149,6 +160,7 @@ export default function OrchestratorDetail() {
     if (errors.length > 0) {
       alert("Save failed:\n" + errors.join("\n"));
     } else {
+      setDirty(false);
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
     }
@@ -204,10 +216,10 @@ export default function OrchestratorDetail() {
         </div>
         <div className="flex items-center gap-2">
           <span className="text-[11px] px-2 py-0.5 rounded-full bg-gray-200 text-gray-700 font-medium">{agent.status}</span>
-          <button className={btnSecondary} onClick={handleSave} disabled={isSaving}>
-            {saved ? "Saved!" : isSaving ? "Saving..." : "Save"}
+          <button className={btnPrimary} onClick={handleSave} disabled={isSaving || !dirty}>
+            {saved ? "Saved!" : dirty ? "\u25CF Save" : "Save"}
           </button>
-          <button className={btnPrimary} onClick={handleGenerate} disabled={genSpec.isPending}>
+          <button className={btnSecondary} onClick={handleGenerate} disabled={genSpec.isPending}>
             {genSpec.isPending ? "Generating..." : "Generate"}
           </button>
           <button className={btnDanger} onClick={async () => { if (confirm("Delete this orchestrator and all its use cases?")) { await deleteAg.mutateAsync(id!); nav("/workbench"); } }}>
@@ -268,15 +280,15 @@ export default function OrchestratorDetail() {
         <h3 className="font-semibold text-text-primary mb-3">Behavior</h3>
         <div className="mb-3">
           <label className="block text-xs text-gray-500 mb-1">Agent Name</label>
-          <input className={inp} value={config.agent_name} onChange={(e) => setConfig({ ...config, agent_name: e.target.value })} />
+          <input className={inp} value={config.agent_name} onChange={(e) => { setConfig({ ...config, agent_name: e.target.value }); setDirty(true); }} />
         </div>
         <div className="mb-3">
           <label className="block text-xs text-gray-500 mb-1">Agent Persona</label>
-          <AutoTextarea className={inp} value={config.agent_persona} onChange={(v) => setConfig({ ...config, agent_persona: v })} placeholder="Describe the orchestrator's role and persona..." />
+          <AutoTextarea className={inp} value={config.agent_persona} onChange={(v) => { setConfig({ ...config, agent_persona: v }); setDirty(true); }} placeholder="Describe the orchestrator's role and persona..." />
         </div>
         <div>
           <label className="block text-xs text-gray-500 mb-1">Additional Context</label>
-          <AutoTextarea className={inp} value={config.additional_context} onChange={(v) => setConfig({ ...config, additional_context: v })} placeholder="Routing rules, escalation policies, business rules..." />
+          <AutoTextarea className={inp} value={config.additional_context} onChange={(v) => { setConfig({ ...config, additional_context: v }); setDirty(true); }} placeholder="Routing rules, escalation policies, business rules..." />
         </div>
       </div>
 

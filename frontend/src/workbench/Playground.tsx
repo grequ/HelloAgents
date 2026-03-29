@@ -7,7 +7,7 @@ import {
   useCompleteUseCase,
 } from "./queries";
 import { suggestUseCase } from "./api";
-import { btnPrimary, btnSecondary, btnDanger, btnSuccess, btnGhost, btnGhostDanger, inp } from "./ui";
+import { btnPrimary, btnSecondary, btnDanger, btnGhost, btnGhostDanger, inp } from "./ui";
 
 const STAGES = ["draft", "discovered", "tested", "completed"] as const;
 const STAGE_LABELS = ["Definition", "Discovered", "Tested", "Completed"] as const;
@@ -79,6 +79,16 @@ export default function Playground() {
   const [behavior, setBehavior] = useState("");
   const [toolDef, setToolDef] = useState("");
   const [discDirty, setDiscDirty] = useState(false);
+
+  // Combined dirty for header Save
+  const anyDirty = ucDirty || discDirty;
+
+  // beforeunload warning
+  useEffect(() => {
+    const handler = (e: BeforeUnloadEvent) => { if (anyDirty) { e.preventDefault(); } };
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
+  }, [anyDirty]);
 
   // Testing
   const [testInputStr, setTestInputStr] = useState("");
@@ -158,14 +168,29 @@ export default function Playground() {
         alert("Create failed: " + (e instanceof Error ? e.message : "Unknown error"));
       }
     } else {
+      const errors: string[] = [];
+      // Save definition
       try {
         await updateUcMut.mutateAsync({ id: ucId!, data: buildData() });
         setUcDirty(false);
+      } catch (e: unknown) {
+        errors.push("Definition: " + (e instanceof Error ? e.message : "Unknown error"));
+      }
+      // Save discovery if dirty
+      if (discDirty) {
+        try {
+          await saveDiscMut.mutateAsync({ useCaseId: ucId!, data: { endpoints, behavior } });
+          setDiscDirty(false);
+        } catch (e: unknown) {
+          errors.push("Discovery: " + (e instanceof Error ? e.message : "Unknown error"));
+        }
+      }
+      if (errors.length > 0) {
+        alert("Save failed:\n" + errors.join("\n"));
+      } else {
         setUcSaved(true);
         setTimeout(() => setUcSaved(false), 2000);
         refetchUc();
-      } catch (e: unknown) {
-        alert("Save failed: " + (e instanceof Error ? e.message : "Unknown error"));
       }
     }
   };
@@ -239,11 +264,11 @@ export default function Playground() {
           <span className="text-[11px] px-2 py-0.5 rounded-full bg-gray-200 text-gray-700 font-medium">{status}</span>
         </div>
         <div className="flex gap-2">
-          <button className={btnSecondary} onClick={handleSaveUseCase} disabled={isNew ? createUcMut.isPending || !ucName.trim() : !ucDirty}>
-            {ucSaved ? "Saved!" : isNew ? (createUcMut.isPending ? "Creating..." : "Create & Save") : "Save"}
+          <button className={btnPrimary} onClick={handleSaveUseCase} disabled={isNew ? createUcMut.isPending || !ucName.trim() : !anyDirty}>
+            {ucSaved ? "Saved!" : isNew ? (createUcMut.isPending ? "Creating..." : "Create & Save") : anyDirty ? "\u25CF Save" : "Save"}
           </button>
           {!isNew && (
-            <button className={btnSuccess} onClick={handleMarkComplete}
+            <button className={btnSecondary} onClick={handleMarkComplete}
               disabled={status !== "tested" || completeUcMut.isPending}>
               {completeUcMut.isPending ? "Completing..." : "Mark Complete"}
             </button>
@@ -406,9 +431,6 @@ export default function Playground() {
                 <div className="flex items-center justify-between mb-3">
                   <h3 className="font-semibold text-text-primary text-sm">Self-Discovery</h3>
                   <div className="flex gap-2">
-                    <button className={btnSuccess} onClick={handleSaveDiscovery} disabled={!discDirty || saveDiscMut.isPending}>
-                      {saveDiscMut.isPending ? "Saving..." : "Save Changes"}
-                    </button>
                     {!agent.has_api_spec ? (
                       <span className="text-xs text-amber-600">Upload API spec first</span>
                     ) : (

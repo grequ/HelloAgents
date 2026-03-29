@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useSpec, useUpdateSpec, useDeleteSpec } from "./queries";
-import { btnPrimary, btnSecondary, btnDanger, btnSuccess } from "./ui";
+import { btnPrimary, btnSecondary, btnDanger } from "./ui";
 
 const TABS = [
   { key: "spec", label: "Specification" },
@@ -21,6 +21,7 @@ export default function AgentSpecView() {
 
   const [tab, setTab] = useState<TabKey>("spec");
   const [dirty, setDirty] = useState(false);
+  const [saved, setSaved] = useState(false);
   const [copied, setCopied] = useState(false);
   const [specMd, setSpecMd] = useState("");
   const [toolsJson, setToolsJson] = useState("");
@@ -44,6 +45,13 @@ export default function AgentSpecView() {
       setTimeout(() => setCopied(false), 2000);
     }
   }, [specMd]);
+
+  // beforeunload warning
+  useEffect(() => {
+    const handler = (e: BeforeUnloadEvent) => { if (dirty) { e.preventDefault(); } };
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
+  }, [dirty]);
 
   useEffect(() => {
     if (spec) {
@@ -74,6 +82,8 @@ export default function AgentSpecView() {
       },
     });
     setDirty(false);
+    setSaved(true);
+    setTimeout(() => setSaved(false), 2000);
   };
 
   const handleDelete = async () => {
@@ -103,11 +113,11 @@ export default function AgentSpecView() {
           </span>
         </div>
         <div className="flex gap-2">
-          <button className={btnSuccess} onClick={handleSave} disabled={!dirty || updateSpec.isPending}>
-            {updateSpec.isPending ? "Saving..." : "Save Changes"}
+          <button className={btnPrimary} onClick={handleSave} disabled={!dirty || updateSpec.isPending}>
+            {saved ? "Saved!" : dirty ? "\u25CF Save" : "Save"}
           </button>
           <button className={btnSecondary} onClick={handleCopyMarkdown}>
-            {copied ? "Copied!" : "Copy .md to Clipboard"}
+            {copied ? "Copied!" : "Copy .md"}
           </button>
           <button className={btnDanger} onClick={handleDelete}>Delete</button>
         </div>

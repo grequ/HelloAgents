@@ -8,24 +8,23 @@ import {
   useTools, useUpdateTool, useDeleteTool, useDiscoverTools,
 } from "./queries";
 import { fetchUrl } from "./api";
-import { btnPrimary, btnDanger, btnGhost, btnGhostDanger, btnGhostCyan, inp } from "./ui";
+import { btnPrimary, btnSecondary, btnDanger, btnGhost, btnGhostDanger, btnGhostCyan, inp } from "./ui";
 
 // --- Tool Card ---
 
-function ToolCard({ tool, useCaseNames, onSaved }: { tool: AgentTool; useCaseNames: Record<string, string>; onSaved?: () => void }) {
+function ToolCard({ tool, useCaseNames }: { tool: AgentTool; useCaseNames: Record<string, string> }) {
   const [name, setName] = useState(tool.name);
   const [desc, setDesc] = useState(tool.description);
-  const [dirty, setDirty] = useState(false);
-  const [saved, setSaved] = useState(false);
+  const [localDirty, setLocalDirty] = useState(false);
   const updateTool = useUpdateTool();
   const deleteTool = useDeleteTool();
 
-  useEffect(() => { setName(tool.name); setDesc(tool.description); setDirty(false); }, [tool.name, tool.description]);
+  useEffect(() => { setName(tool.name); setDesc(tool.description); setLocalDirty(false); }, [tool.name, tool.description]);
 
-  const handleSave = () => {
-    if (!dirty) return;
+  const handleBlurSave = () => {
+    if (!localDirty) return;
     updateTool.mutate({ id: tool.id, data: { name, description: desc } }, {
-      onSuccess: () => { setDirty(false); setSaved(true); setTimeout(() => setSaved(false), 2000); onSaved?.(); },
+      onSuccess: () => { setLocalDirty(false); },
     });
   };
   const toggleStatus = () => {
@@ -39,12 +38,11 @@ function ToolCard({ tool, useCaseNames, onSaved }: { tool: AgentTool; useCaseNam
         <input
           className="flex-1 min-w-0 font-mono text-sm font-semibold text-tedee-navy bg-transparent border-b border-transparent hover:border-gray-300 focus:border-tedee-cyan outline-none"
           value={name}
-          onChange={(e) => { setName(e.target.value); setDirty(true); }}
-          onBlur={handleSave}
+          onChange={(e) => { setName(e.target.value); setLocalDirty(true); }}
+          onBlur={handleBlurSave}
           onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
         />
         <div className="flex items-center gap-2 shrink-0">
-          {dirty && <button onClick={handleSave} className="text-[10px] px-1.5 py-0.5 rounded bg-tedee-cyan/20 text-tedee-navy font-medium">{saved ? "Saved!" : "Save"}</button>}
           {tool.is_write && (
             <span className="text-[10px] px-1.5 py-0.5 rounded bg-orange-100 text-orange-700 font-medium">WRITE</span>
           )}
@@ -67,8 +65,8 @@ function ToolCard({ tool, useCaseNames, onSaved }: { tool: AgentTool; useCaseNam
       <input
         className="w-full text-xs text-gray-500 bg-transparent border-b border-transparent hover:border-gray-300 focus:border-tedee-cyan outline-none mb-2"
         value={desc}
-        onChange={(e) => { setDesc(e.target.value); setDirty(true); }}
-        onBlur={handleSave}
+        onChange={(e) => { setDesc(e.target.value); setLocalDirty(true); }}
+        onBlur={handleBlurSave}
         onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
       />
       <div className="flex flex-wrap gap-1.5">
@@ -107,6 +105,11 @@ export default function OperatorDetail() {
   const testConn = useTestConnection();
   const genSpec = useGenerateSpec();
 
+  // Page-level dirty/saved state
+  const [dirty, setDirty] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [saving, setSaving] = useState(false);
+
   // Name/description editing
   const [editName, setEditName] = useState("");
   const [editDesc, setEditDesc] = useState("");
@@ -137,10 +140,28 @@ export default function OperatorDetail() {
     setNameLoaded(true);
   }, [agent, nameLoaded]);
 
+  // beforeunload warning
+  useEffect(() => {
+    const handler = (e: BeforeUnloadEvent) => { if (dirty) { e.preventDefault(); } };
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
+  }, [dirty]);
+
+  const handleSave = async () => {
+    if (!agent || !dirty) return;
+    setSaving(true);
+    try {
+      await updateAg.mutateAsync({ id: id!, data: { name: editName, description: editDesc } });
+      setDirty(false);
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const handleSaveNameDesc = async () => {
-    if (!agent) return;
-    if (editName === agent.name && editDesc === agent.description) return;
-    await updateAg.mutateAsync({ id: id!, data: { name: editName, description: editDesc } });
+    // kept for onBlur — no-op now, edits saved via header Save
   };
 
   // --- Other handlers ---
@@ -198,7 +219,10 @@ export default function OperatorDetail() {
           <span className="text-[11px] px-2 py-0.5 rounded-full bg-gray-200 text-gray-700 font-medium">{agent.status}</span>
         </div>
         <div className="flex items-center gap-2">
-          <button className={btnPrimary} onClick={handleGenerate} disabled={genSpec.isPending || useCases.length === 0}>
+          <button className={btnPrimary} onClick={handleSave} disabled={saving || !dirty}>
+            {saved ? "Saved!" : dirty ? "\u25CF Save" : "Save"}
+          </button>
+          <button className={btnSecondary} onClick={handleGenerate} disabled={genSpec.isPending || useCases.length === 0}>
             {genSpec.isPending ? "Generating..." : "Generate"}
           </button>
           <button className={btnDanger} onClick={async () => { if (confirm("Delete this operator and all its use cases?")) { await deleteAg.mutateAsync(id!); nav("/workbench"); } }}>
@@ -214,7 +238,7 @@ export default function OperatorDetail() {
           <input
             className="w-full text-xl font-bold text-text-primary bg-transparent border-b border-transparent hover:border-gray-300 focus:border-tedee-cyan outline-none mb-1"
             value={editName}
-            onChange={(e) => setEditName(e.target.value)}
+            onChange={(e) => { setEditName(e.target.value); setDirty(true); }}
             onBlur={handleSaveNameDesc}
             onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
             placeholder="Agent name"
@@ -222,7 +246,7 @@ export default function OperatorDetail() {
           <input
             className="w-full text-sm text-gray-500 bg-transparent border-b border-transparent hover:border-gray-300 focus:border-tedee-cyan outline-none"
             value={editDesc}
-            onChange={(e) => setEditDesc(e.target.value)}
+            onChange={(e) => { setEditDesc(e.target.value); setDirty(true); }}
             onBlur={handleSaveNameDesc}
             onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
             placeholder="Description"
@@ -249,16 +273,18 @@ export default function OperatorDetail() {
               <div className="col-span-2"><span className="text-gray-500">{isMcp ? "Tool Definitions:" : "API Spec:"}</span> <span className="text-text-primary">{agent.has_api_spec ? `Loaded (${agent.api_spec_endpoint_count} ${isMcp ? "tools" : "endpoints"})` : "Not uploaded"}</span></div>
             </div>
             <div className="space-y-3">
-              {/* API Key — inline edit */}
+              {/* API Key — inline edit, saves on blur */}
               <div className="flex items-center gap-2">
                 {editingKey ? (
                   <>
-                    <input type="password" className={`${inp} flex-1`} placeholder={isMcp ? "New auth token" : "New API key"} value={apiKeyInput} onChange={(e) => setApiKeyInput(e.target.value)} autoFocus />
-                    <button className={btnGhost} onClick={async () => {
-                      if (apiKeyInput) { await setApiKeyMut.mutateAsync({ id: id!, apiKey: apiKeyInput }); setApiKeyInput(""); }
-                      setEditingKey(false);
-                    }}>Save</button>
-                    <button className={btnGhost} onClick={() => { setEditingKey(false); setApiKeyInput(""); }}>Cancel</button>
+                    <input type="password" className={`${inp} flex-1`} placeholder={isMcp ? "New auth token" : "New API key"} value={apiKeyInput}
+                      onChange={(e) => setApiKeyInput(e.target.value)}
+                      onBlur={async () => {
+                        if (apiKeyInput) { await setApiKeyMut.mutateAsync({ id: id!, apiKey: apiKeyInput }); setApiKeyInput(""); }
+                        setEditingKey(false);
+                      }}
+                      onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); if (e.key === "Escape") { setEditingKey(false); setApiKeyInput(""); } }}
+                      autoFocus />
                   </>
                 ) : (
                   <button className={btnGhost} onClick={() => setEditingKey(true)}>

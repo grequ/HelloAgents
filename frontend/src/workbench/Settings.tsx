@@ -40,6 +40,7 @@ export default function Settings() {
   });
   const [loaded, setLoaded] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [dirty, setDirty] = useState(false);
 
   useEffect(() => {
     if (!settings || loaded) return;
@@ -47,11 +48,19 @@ export default function Settings() {
     setLoaded(true);
   }, [settings, loaded]);
 
-  const set = (key: keyof OrgSettings, value: string) => setForm((prev) => ({ ...prev, [key]: value }));
+  // beforeunload warning
+  useEffect(() => {
+    const handler = (e: BeforeUnloadEvent) => { if (dirty) { e.preventDefault(); } };
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
+  }, [dirty]);
+
+  const set = (key: keyof OrgSettings, value: string) => { setForm((prev) => ({ ...prev, [key]: value })); setDirty(true); };
 
   const handleSave = async () => {
     try {
       await updateSettings.mutateAsync(form);
+      setDirty(false);
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
     } catch (e: unknown) {
@@ -71,8 +80,8 @@ export default function Settings() {
             Defined once, enforced in every generated agent. Ensures consistent architecture, patterns, and quality across all operators and orchestrators.
           </p>
         </div>
-        <button className={btnPrimary} onClick={handleSave} disabled={updateSettings.isPending}>
-          {saved ? "Saved!" : updateSettings.isPending ? "Saving..." : "Save"}
+        <button className={btnPrimary} onClick={handleSave} disabled={updateSettings.isPending || !dirty}>
+          {saved ? "Saved!" : dirty ? "\u25CF Save" : "Save"}
         </button>
       </div>
 
