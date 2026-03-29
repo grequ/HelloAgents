@@ -137,6 +137,12 @@ export default function OperatorDetail() {
       if (editName !== agent.name || editDesc !== agent.description) {
         await updateAg.mutateAsync({ id: id!, data: { name: editName, description: editDesc } });
       }
+      // Save API key if changed
+      if (apiKeyInput.trim()) {
+        await setApiKeyMut.mutateAsync({ id: id!, apiKey: apiKeyInput });
+        setApiKeyInput("");
+        setEditingKey(false);
+      }
       // Save tool edits
       for (const t of tools) {
         const edit = toolEdits[t.id];
@@ -156,6 +162,8 @@ export default function OperatorDetail() {
     if (!agent) return;
     setEditName(agent.name || "");
     setEditDesc(agent.description || "");
+    setApiKeyInput("");
+    setEditingKey(false);
     const edits: Record<string, ToolEdit> = {};
     for (const t of tools) edits[t.id] = { name: t.name, description: t.description };
     setToolEdits(edits);
@@ -263,37 +271,24 @@ export default function OperatorDetail() {
               {/* API Key */}
               <div className="flex gap-2">
                 {editingKey ? (
-                  <>
-                    <input type="password" className={`${inp} flex-1`}
-                      placeholder={isMcp ? "New auth token" : "New API key"}
-                      value={apiKeyInput}
-                      onChange={(e) => setApiKeyInput(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter" && apiKeyInput) {
-                          setApiKeyMut.mutate({ id: id!, apiKey: apiKeyInput }, { onSuccess: () => { setApiKeyInput(""); setEditingKey(false); } });
-                        }
-                        if (e.key === "Escape") { setEditingKey(false); setApiKeyInput(""); }
-                      }}
-                      autoFocus />
-                    <button className={`${btnGhost} self-start`} onClick={async () => {
-                      if (apiKeyInput) { await setApiKeyMut.mutateAsync({ id: id!, apiKey: apiKeyInput }); setApiKeyInput(""); }
-                      setEditingKey(false);
-                    }}>{setApiKeyMut.isPending ? "Saving..." : "Save Key"}</button>
-                  </>
+                  <input type="password" className={`${inp} flex-1`}
+                    placeholder={isMcp ? "Enter new auth token" : "Enter new API key"}
+                    value={apiKeyInput}
+                    onChange={(e) => { setApiKeyInput(e.target.value); setDirty(true); }}
+                    onKeyDown={(e) => { if (e.key === "Escape") { setEditingKey(false); setApiKeyInput(""); } }}
+                    autoFocus />
                 ) : (
-                  <>
-                    <div className={`${inp} flex-1 flex items-center`}>
-                      {agent.has_api_key ? (
-                        <span className="font-mono text-xs text-text-primary">{agent.api_key_preview || "***"}</span>
-                      ) : (
-                        <span className="text-gray-400 text-sm">No API key set</span>
-                      )}
-                    </div>
-                    <button className={`${btnGhost} self-start`} onClick={() => setEditingKey(true)}>
-                      {agent.has_api_key ? "Change" : "Set Key"}
-                    </button>
-                  </>
+                  <div className={`${inp} flex-1 flex items-center`}>
+                    {agent.has_api_key ? (
+                      <span className="font-mono text-xs text-text-primary">{agent.api_key_preview || "***"}</span>
+                    ) : (
+                      <span className="text-gray-400 text-sm">No API key set</span>
+                    )}
+                  </div>
                 )}
+                <button className={`${btnGhost} self-start`} onClick={() => setEditingKey(!editingKey)}>
+                  {editingKey ? "Cancel" : agent.has_api_key ? "Change" : "Set Key"}
+                </button>
               </div>
               <div className="flex gap-2">
                 <textarea className={`${inp} flex-1`}
