@@ -42,7 +42,7 @@ CREATE TABLE IF NOT EXISTS wb_use_cases (
 
 CREATE TABLE IF NOT EXISTS wb_agent_specs (
     id              CHAR(36) PRIMARY KEY,
-    name            VARCHAR(200) NOT NULL,
+    name            VARCHAR(255) NOT NULL,
     agent_ids       JSON,
     use_case_ids    JSON,
     spec_markdown   LONGTEXT,
@@ -51,8 +51,9 @@ CREATE TABLE IF NOT EXISTS wb_agent_specs (
     skeleton_code   LONGTEXT,
     depends_on      JSON,
     called_by       JSON,
-    status          VARCHAR(20) DEFAULT 'draft',
-    generated_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    status          VARCHAR(20) DEFAULT 'generated',
+    generated_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );
 
 CREATE TABLE IF NOT EXISTS wb_agent_interactions (
@@ -80,17 +81,18 @@ CREATE TABLE IF NOT EXISTS wb_agent_tools (
 );
 
 CREATE TABLE IF NOT EXISTS wb_org_settings (
-    id              CHAR(36) PRIMARY KEY,
-    tech_stack      VARCHAR(200) DEFAULT 'Python 3.12',
-    framework       VARCHAR(200) DEFAULT 'FastAPI + MCP SDK + anthropic SDK',
-    mcp_sdk_version VARCHAR(50) DEFAULT '1.x',
-    deployment      VARCHAR(200) DEFAULT 'Docker containers',
-    error_handling  TEXT,
-    retry_strategy  TEXT,
-    logging         TEXT,
-    auth_pattern    TEXT,
+    id               CHAR(36) PRIMARY KEY,
+    tech_stack       VARCHAR(200) DEFAULT 'Python 3.12',
+    framework        VARCHAR(200) DEFAULT 'FastAPI + MCP SDK + anthropic SDK',
+    mcp_sdk_version  VARCHAR(50) DEFAULT '1.x',
+    deployment       VARCHAR(200) DEFAULT 'Docker containers',
+    error_handling   TEXT,
+    retry_strategy   TEXT,
+    logging          TEXT,
+    auth_pattern     TEXT,
     coding_standards TEXT,
-    communication   VARCHAR(200) DEFAULT 'MCP (Model Context Protocol)',
-    org_rules       TEXT,
-    updated_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    communication    VARCHAR(200) DEFAULT 'MCP (Model Context Protocol)',
+    ai_model         TEXT,
+    org_rules        TEXT,
+    updated_at       TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );
