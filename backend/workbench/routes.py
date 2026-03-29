@@ -156,7 +156,7 @@ async def test_connection(agent_id: str):
     try:
         async with httpx.AsyncClient(timeout=10.0) as http:
             resp = await http.get(s["api_base_url"], headers=headers)
-        return {"ok": True, "status_code": resp.status_code}
+        return {"ok": resp.status_code < 400, "status_code": resp.status_code}
     except Exception as e:
         return {"ok": False, "error": str(e)}
 
@@ -178,7 +178,7 @@ async def test_url(body: dict):
     try:
         async with httpx.AsyncClient(timeout=10.0) as http:
             resp = await http.get(url, headers=headers)
-        return {"ok": True, "status_code": resp.status_code}
+        return {"ok": resp.status_code < 400, "status_code": resp.status_code}
     except Exception as e:
         return {"ok": False, "error": str(e)}
 
