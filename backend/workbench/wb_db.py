@@ -511,8 +511,9 @@ async def save_discovery(uc_id: str, endpoints: list, behavior: str):
     pool = await get_pool()
     async with pool.acquire() as conn:
         async with conn.cursor() as cur:
+            # Only advance status forward, never backward
             await cur.execute(
-                "UPDATE wb_use_cases SET discovered_endpoints = %s, discovered_behavior = %s, status = 'discovered' WHERE id = %s",
+                "UPDATE wb_use_cases SET discovered_endpoints = %s, discovered_behavior = %s, status = CASE WHEN status = 'draft' THEN 'discovered' ELSE status END WHERE id = %s",
                 (json.dumps(endpoints), behavior, uc_id))
 
 
@@ -530,8 +531,9 @@ async def save_test_result(uc_id: str, result: dict):
     existing = existing[-20:]
     async with pool.acquire() as conn:
         async with conn.cursor() as cur:
+            # Only advance status forward, never backward from completed
             await cur.execute(
-                "UPDATE wb_use_cases SET test_results = %s, status = 'tested' WHERE id = %s",
+                "UPDATE wb_use_cases SET test_results = %s, status = CASE WHEN status IN ('draft', 'discovered') THEN 'tested' ELSE status END WHERE id = %s",
                 (json.dumps(existing), uc_id))
 
 
