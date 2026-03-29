@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
+import { useQueryClient } from "@tanstack/react-query";
 import type { UseCase, AgentTool } from "../types";
 import {
   useAgent, useUseCases,
@@ -7,7 +8,7 @@ import {
   useSetApiKey, useUploadSpec, useTestConnection, useGenerateSpec,
   useTools, useUpdateTool, useDeleteTool, useDiscoverTools,
 } from "./queries";
-import { fetchUrl, discoverEndpoints, type DiscoveredEndpoint } from "./api";
+import { fetchUrl, discoverEndpoints, discoverUseCases, removeEndpoint, type DiscoveredEndpoint } from "./api";
 import { btnPrimary, btnSecondary, btnDanger, btnGhost, btnGhostDanger, btnGhostCyan, inp } from "./ui";
 
 // --- Tool Card ---
@@ -60,6 +61,7 @@ function ToolCard({ tool, edit, onChange, onDelete, useCaseNames }: {
 export default function OperatorDetail() {
   const { id } = useParams<{ id: string }>();
   const nav = useNavigate();
+  const qc = useQueryClient();
   const { data: agent, isLoading: agentLoading } = useAgent(id!);
   const { data: useCases = [], isLoading: ucLoading } = useUseCases(id!);
   const { data: tools = [] } = useTools(id!);
@@ -184,6 +186,7 @@ export default function OperatorDetail() {
   const [specLoading, setSpecLoading] = useState(false);
   const [discovering, setDiscovering] = useState(false);
   const [discoveredEndpoints, setDiscoveredEndpoints] = useState<DiscoveredEndpoint[] | null>(null);
+  const [discoveringUcs, setDiscoveringUcs] = useState(false);
 
   const handleUploadSpec = async () => {
     const input = specInput.trim();
@@ -254,6 +257,21 @@ export default function OperatorDetail() {
       nav(`/workbench/specs/${spec.id}`);
     } catch (e: unknown) {
       alert("Generation failed: " + (e instanceof Error ? e.message : "Unknown error"));
+    }
+  };
+
+  const handleDiscoverUseCases = async () => {
+    if (!id || !agent?.has_api_spec) return;
+    setDiscoveringUcs(true);
+    try {
+      const result = await discoverUseCases(id);
+      qc.invalidateQueries({ queryKey: ["useCases", id] });
+      qc.invalidateQueries({ queryKey: ["dashboard"] });
+      alert(`Created ${result.created} use cases. Each has been analyzed and tested where possible.`);
+    } catch (e: unknown) {
+      alert("Discovery failed: " + (e instanceof Error ? e.message : "Unknown error"));
+    } finally {
+      setDiscoveringUcs(false);
     }
   };
 
@@ -373,7 +391,7 @@ export default function OperatorDetail() {
                   </h4>
                   <div className="space-y-1 max-h-[300px] overflow-y-auto">
                     {eps.map((ep, i) => (
-                      <div key={i} className="flex items-baseline gap-2 text-xs">
+                      <div key={i} className="flex items-center gap-2 text-xs group">
                         <span className={`font-mono font-semibold px-1.5 py-0.5 rounded text-[10px] shrink-0 ${
                           ep.method === "GET" ? "bg-green-100 text-green-700" :
                           ep.method === "POST" ? "bg-blue-100 text-blue-700" :
@@ -382,7 +400,16 @@ export default function OperatorDetail() {
                           "bg-gray-100 text-gray-700"
                         }`}>{ep.method}</span>
                         <span className="font-mono text-text-primary shrink-0">{ep.path}</span>
-                        {ep.summary && <span className="text-gray-400 truncate">{ep.summary}</span>}
+                        {ep.summary && <span className="text-gray-400 truncate flex-1 min-w-0">{ep.summary}</span>}
+                        <button
+                          className="opacity-0 group-hover:opacity-100 text-[10px] text-red-400 hover:text-red-600 shrink-0 px-1 transition-opacity"
+                          title="Remove this endpoint from spec"
+                          onClick={async () => {
+                            await removeEndpoint(id!, ep.method.toLowerCase(), ep.path);
+                            qc.invalidateQueries({ queryKey: ["agent", id] });
+                            setDiscoveredEndpoints(null);
+                          }}
+                        >✕</button>
                       </div>
                     ))}
                   </div>
@@ -397,8 +424,36 @@ export default function OperatorDetail() {
       <div>
         <div className="flex items-center justify-between mb-3">
           <h3 className="font-semibold text-text-primary">Use Cases ({useCases.length})</h3>
-          <Link to={`/workbench/agents/${id}/usecases/new`} className={btnPrimary}>+ Add Use Case</Link>
+          <div className="flex gap-2">
+            {(agent.has_api_spec || pendingSpec) && (
+              <button className={btnSecondary} onClick={async () => {
+                // Save pending spec first if needed
+                if (pendingSpec && !agent.has_api_spec) {
+                  try {
+                    await uploadSpec.mutateAsync({ id: id!, spec: pendingSpec.spec, source: pendingSpec.source });
+                    setPendingSpec(null);
+                  } catch (e: unknown) {
+                    alert("Save spec first: " + (e instanceof Error ? e.message : "Unknown error"));
+                    return;
+                  }
+                }
+                handleDiscoverUseCases();
+              }} disabled={discoveringUcs}>
+                {discoveringUcs ? "Discovering..." : "Discover Use Cases"}
+              </button>
+            )}
+            <Link to={`/workbench/agents/${id}/usecases/new`} className={btnPrimary}>+ Add Use Case</Link>
+          </div>
         </div>
+        {discoveringUcs && (
+          <div className="bg-tedee-cyan/5 border border-tedee-cyan/20 rounded-lg px-4 py-3 mb-3 flex items-center gap-3">
+            <svg className="animate-spin h-4 w-4 text-tedee-navy" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>
+            <div>
+              <p className="text-sm font-medium text-tedee-navy">AI is analyzing your API spec...</p>
+              <p className="text-xs text-gray-500">Generating use cases, running discovery, and testing each one. This may take a minute.</p>
+            </div>
+          </div>
+        )}
         <div className="space-y-2">
           {useCases.map((uc) => (
             <div key={uc.id} className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">

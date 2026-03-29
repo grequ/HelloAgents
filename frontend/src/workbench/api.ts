@@ -86,6 +86,19 @@ export async function listOperators(): Promise<Agent[]> {
   return request<Agent[]>("GET", "/agents/operators");
 }
 
+export interface McpDiscoveryResult {
+  ok: boolean;
+  tools?: { name: string; description: string; inputSchema: unknown }[];
+  tool_count?: number;
+  server_name?: string;
+  server_description?: string;
+  error?: string;
+}
+
+export async function discoverMcpAgent(url: string): Promise<McpDiscoveryResult> {
+  return request<McpDiscoveryResult>("POST", "/discover-mcp", { url });
+}
+
 // Interactions (relational)
 export interface InteractionRow {
   id: string;
@@ -263,6 +276,18 @@ export async function updateSpec(id: string, data: Partial<AgentSpec>): Promise<
 
 export async function deleteSpec(id: string): Promise<void> {
   return request<void>("DELETE", `/specs/${id}`);
+}
+
+export async function removeEndpoint(agentId: string, method: string, path: string): Promise<Agent> {
+  return request<Agent>("POST", `/agents/${agentId}/remove-endpoint`, { method, path });
+}
+
+export async function discoverUseCases(agentId: string): Promise<{ created: number; use_cases: UseCase[] }> {
+  return request<{ created: number; use_cases: UseCase[] }>("POST", `/agents/${agentId}/discover-use-cases`);
+}
+
+export function exportProjectUrl(specId: string): string {
+  return `${BASE}/specs/${specId}/export-project`;
 }
 
 // Org Settings

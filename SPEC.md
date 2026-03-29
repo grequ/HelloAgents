@@ -1266,6 +1266,166 @@ python generate_agent_spec.py examples/logistics_usecases.yaml -o output/
 
 ---
 
+## Runtime Layer — Deployable Agent Projects
+
+### Problem
+
+AgentForge designs agents and generates specs, but there is no standard path from
+spec to running agent. Teams take the generated code and figure out deployment
+independently, leading to inconsistent project structures, missing configs, and
+agents that can't easily connect to each other.
+
+### Solution: Level 1 — Standardized Deployable Output
+
+When a team clicks **"Export Project"** on a generated spec, AgentForge produces a
+complete, runnable project — not a skeleton that needs heavy editing, but a real
+service that starts with one command.
+
+### Exported Project Structure
+
+**For operators (MCP server):**
+
+```
+{agent-slug}/
+├── server.py              # Complete MCP server — @server.tool() handlers with httpx calls
+├── requirements.txt       # mcp, httpx, python-dotenv, etc. (pinned versions)
+├── Dockerfile             # Python 3.12 slim, installs deps, runs server.py
+├── docker-compose.yml     # Single service, port mapping, env_file reference
+├── .env.example           # LEGACY_API_BASE_URL, LEGACY_API_KEY, MCP_PORT=8100
+├── README.md              # What this agent does, how to run, how to test, env vars reference
+└── tests/
+    └── test_tools.py      # Smoke tests calling each tool with sample input
+```
+
+**For orchestrators (Claude agent):**
+
+```
+{agent-slug}/
+├── orchestrator.py        # Claude tool_use loop, MCP client sessions to operators
+├── requirements.txt       # anthropic, mcp, python-dotenv, etc. (pinned versions)
+├── Dockerfile             # Python 3.12 slim, installs deps, runs orchestrator.py
+├── docker-compose.yml     # Orchestrator service + references to operator services
+├── .env.example           # ANTHROPIC_API_KEY, operator MCP URIs, ports
+├── README.md              # Architecture, connected operators, use cases, how to run
+└── tests/
+    └── test_orchestration.py  # Sample conversation flows testing routing logic
+```
+
+### What Gets Generated
+
+Each file in the project is generated from workbench data — not generic templates:
+
+| File | Generated From |
+|---|---|
+| `server.py` / `orchestrator.py` | `skeleton_code` field from spec (already complete Python) |
+| `requirements.txt` | Extracted from code imports + org settings tech stack |
+| `Dockerfile` | Standard template, parameterized by Python version from org settings |
+| `docker-compose.yml` | Service name from agent name, port from convention, env_file |
+| `.env.example` | Extracted from code (API URLs, keys referenced in the implementation) |
+| `README.md` | Agent name, description, use cases, connected operators, tool list |
+| `tests/` | Generated from use case sample conversations + test results data |
+
+### Export Flow
+
+```
+Spec View → [Export Project] → Backend generates ZIP → Browser downloads
+```
+
+**Backend endpoint:** `GET /workbench/specs/{spec_id}/export-project`
+
+Returns a ZIP file containing the complete project directory.
+
+### Docker Compose Convention
+
+All agents follow a standard port and naming convention so they can find each other:
+
+```yaml
+# Operator MCP servers
+services:
+  product-catalog:
+    build: ./product-catalog
+    ports: ["8101:8100"]
+
+  order-management:
+    build: ./order-management
+    ports: ["8102:8100"]
+
+  # Orchestrator connects to operators via MCP
+  support-orchestrator:
+    build: ./support-orchestrator
+    ports: ["8200:8200"]
+    environment:
+      - PRODUCT_CATALOG_MCP_URI=http://product-catalog:8100
+      - ORDER_MANAGEMENT_MCP_URI=http://order-management:8100
+```
+
+### One Command to Run
+
+```bash
+# After export and unzip:
+cd my-agent/
+cp .env.example .env
+# Fill in API keys
+docker compose up
+```
+
+The agent is running. MCP tools are live. Orchestrators can connect.
+
+### External Agent Discovery
+
+Agents built outside AgentForge (by other teams, platforms, or vendors) can be
+registered into the workbench so orchestrators can connect to them.
+
+**Dashboard → External Agent tab:**
+
+1. Select type: **MCP Server** or **REST API**
+2. Enter the running agent's URL
+3. Click **Discover Tools** — for MCP servers, AgentForge connects via SSE,
+   establishes a `ClientSession`, calls `list_tools()`, and displays all
+   discovered tools with names, descriptions, and input schemas
+4. Review discovered tools → click **Register Agent**
+5. The agent is created as an operator with the URL and tool definitions saved
+
+**Backend endpoint:** `POST /workbench/discover-mcp`
+- Connects to an MCP server URL using `mcp.client.sse.sse_client`
+- Initializes a session and calls `list_tools()`
+- Returns tool definitions (name, description, inputSchema)
+
+**Interoperability:** Any MCP-compatible agent — whether built by AgentForge,
+deployed from LobeHub, or hand-coded — can be registered this way. The
+orchestrator doesn't care where the MCP server came from; it connects via
+the standard protocol and calls `session.call_tool()`.
+
+### Orchestrator-to-Orchestrator Connections
+
+Orchestrators can connect to other orchestrators, not just operators. This
+enables hierarchical agent architectures:
+
+```
+Top-Level Orchestrator
+  ├── Sub-Orchestrator A (handles product domain)
+  │     ├── Product Catalog Operator
+  │     └── Inventory Operator
+  ├── Sub-Orchestrator B (handles customer domain)
+  │     ├── Customer Management Operator
+  │     └── Support Tickets Operator
+  └── Payment Operator (direct connection)
+```
+
+The "Connected Agents" section in orchestrator detail shows all agents
+(operators and orchestrators) with role badges, and the spec generator
+produces code that handles both connection types.
+
+### Future: Level 2 — Agent Registry (not built yet)
+
+Running agents register themselves with AgentForge, enabling:
+- Live status on the Map view (green = running, red = down)
+- Orchestrators auto-discover operator URLs from registry
+- Health monitoring and dependency tracking
+- This is the next step after Level 1 is stable
+
+---
+
 ## Implementation Priority
 
 ### Phase 1 — Foundation
@@ -1288,12 +1448,18 @@ python generate_agent_spec.py examples/logistics_usecases.yaml -o output/
 11. Spec generation from workbench data
 12. Spec review + edit UI
 13. Cross-agent dependency mapping
-14. Export (ZIP download)
 
-### Phase 5 — Polish
-15. Migration map visualization (graph/diagram)
-16. Progress tracking + dashboard stats
-17. Bulk import (CSV/YAML for agents + use cases)
+### Phase 5 — Runtime (Level 1)
+14. Project export engine (ZIP with complete runnable project)
+15. Dockerfile + docker-compose.yml generation
+16. README generation from workbench data
+17. Smoke test generation from use case test results
+18. Export UI button on Spec View page
+
+### Phase 6 — Polish
+19. Migration map visualization (graph/diagram)
+20. Progress tracking + dashboard stats
+21. Bulk import (CSV/YAML for agents + use cases)
 
 ---
 

@@ -1,8 +1,8 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import type { Agent, ConnectionResult } from "../types";
-import { useDashboard, useCreateAgent, useSeedDemoData, useSetApiKey, useSpecs } from "./queries";
-import { testUrl } from "./api";
+import { useDashboard, useCreateAgent, useSeedDemoData, useSetApiKey, useUploadSpec, useSpecs } from "./queries";
+import { testUrl, discoverMcpAgent } from "./api";
 import { btnPrimary, btnSecondary, btnGhost, inp } from "./ui";
 
 const STATUS_COLORS: Record<string, string> = {
@@ -13,7 +13,7 @@ const STATUS_COLORS: Record<string, string> = {
   spec_generated: "bg-emerald-100 text-emerald-700",
 };
 
-type RoleTab = "operator" | "orchestrator";
+type RoleTab = "operator" | "orchestrator" | "external";
 
 const EMPTY_OPERATOR_FORM = {
   name: "", description: "", category: "", owner_team: "",
@@ -24,19 +24,28 @@ const EMPTY_ORCHESTRATOR_FORM = {
   name: "", description: "",
 };
 
+const EMPTY_EXTERNAL_FORM = {
+  name: "", description: "", url: "", api_type: "mcp" as string,
+};
+
 export default function Dashboard() {
   const { data, isLoading } = useDashboard();
   const specsQuery = useSpecs();
   const createAgent = useCreateAgent();
   const setApiKey = useSetApiKey();
+  const uploadSpec = useUploadSpec();
   const seedDemo = useSeedDemoData();
 
   const [showForm, setShowForm] = useState(false);
   const [roleTab, setRoleTab] = useState<RoleTab>("operator");
   const [opForm, setOpForm] = useState({ ...EMPTY_OPERATOR_FORM });
   const [orchForm, setOrchForm] = useState({ ...EMPTY_ORCHESTRATOR_FORM });
+  const [extForm, setExtForm] = useState({ ...EMPTY_EXTERNAL_FORM });
   const [connResult, setConnResult] = useState<ConnectionResult | null>(null);
   const [testing, setTesting] = useState(false);
+  const [discovering, setDiscovering] = useState(false);
+  const [discoveredTools, setDiscoveredTools] = useState<{ name: string; description: string }[] | null>(null);
+  const [discoverError, setDiscoverError] = useState<string | null>(null);
 
   const agents: Agent[] = data?.agents || [];
   const stats = data?.stats || { agents: {}, use_cases: {}, specs_total: 0 };
@@ -105,6 +114,64 @@ export default function Dashboard() {
     }
   };
 
+  const handleDiscoverExternal = async () => {
+    if (!extForm.url.trim()) return;
+    setDiscovering(true);
+    setDiscoveredTools(null);
+    setDiscoverError(null);
+    try {
+      if (extForm.api_type === "mcp") {
+        const result = await discoverMcpAgent(extForm.url);
+        if (result.ok && result.tools) {
+          setDiscoveredTools(result.tools);
+          setExtForm((f) => ({
+            ...f,
+            name: f.name || result.server_name || "External MCP Agent",
+            description: f.description || result.server_description || "",
+          }));
+        } else {
+          setDiscoverError(result.error || "Failed to connect");
+        }
+      } else {
+        // REST — test connection
+        const result = await testUrl(extForm.url, "", "none");
+        if (result.ok) {
+          setDiscoveredTools([]);
+          setDiscoverError(null);
+        } else {
+          setDiscoverError(result.error || `HTTP ${result.status_code}`);
+        }
+      }
+    } catch (e: unknown) {
+      setDiscoverError(e instanceof Error ? e.message : "Connection failed");
+    } finally {
+      setDiscovering(false);
+    }
+  };
+
+  const handleCreateExternal = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      const agent = await createAgent.mutateAsync({
+        name: extForm.name,
+        description: extForm.description,
+        agent_role: "operator",
+        api_type: extForm.api_type,
+        api_base_url: extForm.url,
+      });
+      // If MCP tools were discovered, save them as the agent's spec
+      if (discoveredTools && discoveredTools.length > 0) {
+        await uploadSpec.mutateAsync({ id: agent.id, spec: discoveredTools, source: extForm.url });
+      }
+      setExtForm({ ...EMPTY_EXTERNAL_FORM });
+      setDiscoveredTools(null);
+      setDiscoverError(null);
+      setShowForm(false);
+    } catch (e: unknown) {
+      alert("Create failed: " + (e instanceof Error ? e.message : "Unknown error"));
+    }
+  };
+
   if (isLoading) return <p className="p-6 text-sm text-gray-500">Loading...</p>;
 
   return (
@@ -152,6 +219,15 @@ export default function Dashboard() {
               onClick={() => { setRoleTab("orchestrator"); setConnResult(null); }}
             >
               Orchestrator
+            </button>
+            <button
+              type="button"
+              className={`px-4 py-1.5 rounded-md text-sm font-medium transition-colors ${
+                roleTab === "external" ? "bg-white shadow-sm text-tedee-navy" : "text-gray-500 hover:text-gray-700"
+              }`}
+              onClick={() => { setRoleTab("external"); setConnResult(null); setDiscoveredTools(null); setDiscoverError(null); }}
+            >
+              External Agent
             </button>
           </div>
 
@@ -215,7 +291,7 @@ export default function Dashboard() {
                 )}
               </div>
             </form>
-          ) : (
+          ) : roleTab === "orchestrator" ? (
             <form className="space-y-3" onSubmit={handleCreateOrchestrator}>
               <input className={inp} placeholder="Agent name *" required value={orchForm.name}
                 onChange={(e) => setOrchForm({ ...orchForm, name: e.target.value })} />
@@ -230,6 +306,66 @@ export default function Dashboard() {
                   onClick={() => { setShowForm(false); setOrchForm({ ...EMPTY_ORCHESTRATOR_FORM }); }}>
                   Cancel
                 </button>
+              </div>
+            </form>
+          ) : (
+            <form className="space-y-3" onSubmit={handleCreateExternal}>
+              <p className="text-xs text-gray-500 mb-1">Register an agent that's already running. For MCP servers, tools are discovered automatically.</p>
+              <div className="grid grid-cols-2 gap-3">
+                <input className={inp} placeholder="Agent name *" required value={extForm.name}
+                  onChange={(e) => setExtForm({ ...extForm, name: e.target.value })} />
+                <select className={inp} value={extForm.api_type}
+                  onChange={(e) => { setExtForm({ ...extForm, api_type: e.target.value }); setDiscoveredTools(null); setDiscoverError(null); }}>
+                  <option value="mcp">MCP Server</option>
+                  <option value="rest">REST API</option>
+                </select>
+              </div>
+              <input className={inp} placeholder="Description" value={extForm.description}
+                onChange={(e) => setExtForm({ ...extForm, description: e.target.value })} />
+              <input className={inp}
+                placeholder={extForm.api_type === "mcp" ? "MCP Server URL (e.g. http://10.0.1.5:8100/sse)" : "API Base URL (e.g. https://api.example.com/v1)"}
+                value={extForm.url}
+                onChange={(e) => { setExtForm({ ...extForm, url: e.target.value }); setDiscoveredTools(null); setDiscoverError(null); }} />
+
+              <div className="flex items-center gap-3">
+                <button type="button" className={btnGhost}
+                  onClick={handleDiscoverExternal}
+                  disabled={discovering || !extForm.url.trim()}>
+                  {discovering ? "Discovering..." : extForm.api_type === "mcp" ? "Discover Tools" : "Test Connection"}
+                </button>
+                {discoverError && <span className="text-xs font-medium text-red-600">{discoverError}</span>}
+                {discoveredTools && !discoverError && (
+                  <span className="text-xs font-medium text-green-600">
+                    Connected{discoveredTools.length > 0 ? ` — ${discoveredTools.length} tool${discoveredTools.length !== 1 ? "s" : ""} found` : ""}
+                  </span>
+                )}
+              </div>
+
+              {/* Discovered tools preview */}
+              {discoveredTools && discoveredTools.length > 0 && (
+                <div className="bg-gray-50 rounded-lg border border-gray-200 p-3">
+                  <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-2">Discovered Tools</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {discoveredTools.map((t, i) => (
+                      <span key={i} className="text-[11px] font-mono px-2 py-1 rounded bg-white border border-gray-200 text-tedee-navy" title={t.description}>
+                        {t.name}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div className="flex gap-2 items-center">
+                <button type="submit" className={btnPrimary} disabled={createAgent.isPending || !extForm.name.trim() || !discoveredTools}>
+                  {createAgent.isPending ? "Creating..." : "Register Agent"}
+                </button>
+                <button type="button" className={btnSecondary}
+                  onClick={() => { setShowForm(false); setExtForm({ ...EMPTY_EXTERNAL_FORM }); setDiscoveredTools(null); setDiscoverError(null); }}>
+                  Cancel
+                </button>
+                {!discoveredTools && extForm.url.trim() && (
+                  <span className="text-xs text-gray-400">{extForm.api_type === "mcp" ? "Discover tools" : "Test connection"} before registering</span>
+                )}
               </div>
             </form>
           )}

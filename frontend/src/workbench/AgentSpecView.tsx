@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useSpec, useUpdateSpec, useDeleteSpec } from "./queries";
+import { exportProjectUrl } from "./api";
 import { btnPrimary, btnSecondary, btnDanger } from "./ui";
 
 const TABS = [
@@ -131,6 +132,9 @@ export default function AgentSpecView() {
           <button className={btnSecondary} onClick={handleCopyMarkdown}>
             {copied ? "Copied!" : "Copy .md"}
           </button>
+          <a href={exportProjectUrl(id!)} className={btnSecondary + " no-underline"} download>
+            Export Project
+          </a>
           <button className={btnDanger} onClick={handleDelete}>Delete</button>
         </div>
       </div>

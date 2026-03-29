@@ -305,35 +305,39 @@ async def _generate_orchestrator(agent_name: str, agents: list[dict],
                                  use_cases: list[dict], config: dict,
                                  connected_operators: list[dict],
                                  org_settings: dict | None = None) -> dict:
-    """Generate an orchestrator agent that connects to MCP operator servers."""
+    """Generate an orchestrator agent that connects to other agents (operators and/or orchestrators)."""
 
-    # Build operator context — each connected operator with its tools
-    operators_ctx = []
-    for op in connected_operators:
-        op_entry = f"### {op['name']}\n"
-        op_entry += f"- Description: {op.get('description', '')}\n"
-        op_entry += f"- Server URI: {op.get('api_base_url', 'N/A')}\n"
-        op_entry += f"- Auth: {op.get('api_auth_type', 'none')}\n"
+    # Build connected agents context — each with its role and capabilities
+    agents_ctx = []
+    for ag in connected_operators:
+        role = ag.get("agent_role", "operator")
+        entry = f"### {ag['name']} ({role})\n"
+        entry += f"- Description: {ag.get('description', '')}\n"
+        entry += f"- Role: {role}\n"
+        if role == "operator":
+            entry += f"- Server URI: {ag.get('api_base_url', 'N/A')}\n"
+            entry += f"- Auth: {ag.get('api_auth_type', 'none')}\n"
+        else:
+            entry += f"- Type: Sub-orchestrator (delegates through its own connected agents)\n"
 
-        if op.get("api_spec"):
-            if isinstance(op["api_spec"], list):
-                # MCP tool definitions
-                op_entry += "- MCP Tools:\n"
-                for tool in op["api_spec"]:
+        if ag.get("api_spec"):
+            if isinstance(ag["api_spec"], list):
+                entry += "- MCP Tools:\n"
+                for tool in ag["api_spec"]:
                     tname = tool.get("name", "unnamed")
                     tdesc = tool.get("description", "")
                     params = tool.get("inputSchema", {}).get("properties", {})
                     param_names = ", ".join(params.keys()) if params else "none"
-                    op_entry += f"  - {tname}({param_names}): {tdesc}\n"
-            elif isinstance(op["api_spec"], dict):
-                paths = op["api_spec"].get("paths", {})
-                op_entry += f"- API Endpoints ({len(paths)} paths):\n"
+                    entry += f"  - {tname}({param_names}): {tdesc}\n"
+            elif isinstance(ag["api_spec"], dict):
+                paths = ag["api_spec"].get("paths", {})
+                entry += f"- API Endpoints ({len(paths)} paths):\n"
                 for path, methods in paths.items():
                     for method, details in methods.items():
                         if method in ("get", "post", "put", "patch", "delete"):
-                            op_entry += f"  - {method.upper()} {path}: {details.get('summary', details.get('operationId', ''))}\n"
+                            entry += f"  - {method.upper()} {path}: {details.get('summary', details.get('operationId', ''))}\n"
 
-        operators_ctx.append(op_entry)
+        agents_ctx.append(entry)
 
     # Build use case context (same format as operator path)
     use_cases_ctx = []
@@ -396,8 +400,8 @@ async def _generate_orchestrator(agent_name: str, agents: list[dict],
         if parts:
             org_section = "## Organization Standards\nAll agents in this organization follow these standards:\n" + "\n".join(parts)
 
-    prompt = f"""You are a senior AI architect. Generate an orchestrator agent that connects to these
-MCP operator servers and uses Claude to decide which tools to call. This document will be given to
+    prompt = f"""You are a senior AI architect. Generate an orchestrator agent that connects to other agents
+(operators and/or other orchestrators) and uses Claude to decide which tools to call. This document will be given to
 Claude Code (an AI coding assistant) to implement the orchestrator from scratch.
 
 ## Orchestrator Name: {agent_name}
@@ -405,8 +409,8 @@ Claude Code (an AI coding assistant) to implement the orchestrator from scratch.
 {config_section}
 {org_section}
 
-## Connected MCP Operator Servers
-{chr(10).join(operators_ctx) if operators_ctx else "No connected operators defined yet."}
+## Connected Agents (Operators and Orchestrators)
+{chr(10).join(agents_ctx) if agents_ctx else "No connected agents defined yet."}
 
 ## Orchestration Use Cases
 ```json
@@ -426,21 +430,21 @@ Structure it EXACTLY as follows:
 # {{Agent Name}} — Orchestrator Agent Implementation Specification
 
 ## Overview
-Purpose: an orchestrator agent that connects to multiple MCP operator servers
+Purpose: an orchestrator agent that connects to other agents (operators and/or orchestrators)
 and uses Claude (tool_use) to decide which tools to call based on user requests.
 
 ## Technology Stack
 Python, `anthropic` SDK, `mcp` SDK for MCP client connections, etc. Include specific versions.
 
-## Connected Operators
-For EACH MCP operator server: name, server URI, auth, available MCP tools with parameters.
+## Connected Agents
+For EACH connected agent: name, role (operator/orchestrator), server URI, auth, available MCP tools with parameters.
 
 ## Agent Role & Persona
 How the orchestrator should behave, tone, decision-making approach.
 
 ## Decision Logic
-For each use case: what triggers it, which operator(s) and tool(s) to call, in what order,
-how to combine results from multiple operators.
+For each use case: what triggers it, which agent(s) and tool(s) to call, in what order,
+how to combine results from multiple agents.
 
 ## System Prompt
 The complete system prompt for the Claude orchestration layer.

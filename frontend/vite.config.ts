@@ -17,6 +17,7 @@ export default defineConfig({
       "/workbench/suggest-use-case": "http://localhost:8000",
       "/workbench/tools": "http://localhost:8000",
       "/workbench/generate-test-input": "http://localhost:8000",
+      "/workbench/discover-mcp": "http://localhost:8000",
       "/workbench/discover-endpoints": "http://localhost:8000",
       "/workbench/discover": "http://localhost:8000",
       "/workbench/test": "http://localhost:8000",

@@ -13,7 +13,7 @@ interface MapNode {
   name: string;
   agentRole: string;
   tools: ToolDef[];
-  connectedOperators: string[];
+  connectedAgents: string[];
   status: string;
   linkTo: string;
   hasSpec: boolean;
@@ -37,7 +37,7 @@ const CARD_HEADER = 48;
 const CARD_PADDING_BOTTOM = 16;
 
 function cardHeight(node: MapNode): number {
-  const items = node.agentRole === "orchestrator" ? node.connectedOperators : node.tools;
+  const items = node.agentRole === "orchestrator" ? node.connectedAgents : node.tools;
   const linesH = Math.max(items.length, 1) * TOOL_LINE_H;
   return Math.max(CARD_MIN_H, CARD_HEADER + linesH + CARD_PADDING_BOTTOM);
 }
@@ -49,7 +49,7 @@ function parseTools(toolsJson: unknown): ToolDef[] {
     .map((t) => ({ name: t.name, description: t.description }));
 }
 
-// --- Build a map of orchestrator agent_id → connected operator names ---
+// --- Build a map of orchestrator agent_id → connected agent names ---
 
 function buildOrchestratorConnections(agents: Agent[], interactions: InteractionRow[]): Map<string, string[]> {
   const agentById = new Map(agents.map((a) => [a.id, a]));
@@ -60,7 +60,7 @@ function buildOrchestratorConnections(agents: Agent[], interactions: Interaction
       const names: string[] = [];
       const seen = new Set<string>();
       for (const row of interactions) {
-        // Orchestrator calls operator (from = orchestrator, to = operator)
+        // Orchestrator calls another agent (from = orchestrator, to = target)
         if (row.from_agent_id === agent.id && row.from_agent_id !== row.to_agent_id) {
           const target = agentById.get(row.to_agent_id);
           if (target && !seen.has(target.id)) {
@@ -68,7 +68,7 @@ function buildOrchestratorConnections(agents: Agent[], interactions: Interaction
             names.push(target.name);
           }
         }
-        // Operator provides to orchestrator (to = orchestrator)
+        // Agent provides to orchestrator (to = orchestrator)
         if (row.to_agent_id === agent.id && row.from_agent_id !== row.to_agent_id) {
           const source = agentById.get(row.from_agent_id);
           if (source && !seen.has(source.id)) {
@@ -116,7 +116,7 @@ function buildNodes(agents: Agent[], specs: AgentSpec[], interactions: Interacti
       name: agent.name,
       agentRole: agent.agent_role,
       tools,
-      connectedOperators: orchConnections.get(agent.id) || [],
+      connectedAgents: orchConnections.get(agent.id) || [],
       status: spec ? spec.status : agent.status,
       linkTo: `/workbench/agents/${agent.id}`,
       hasSpec: !!spec,
@@ -303,9 +303,9 @@ export default function AgentMap() {
               : "#fde68a";
 
             const sectionLabel = isOrchestrator ? "CONNECTED" : "TOOLS";
-            const items = isOrchestrator ? node.connectedOperators : node.tools;
+            const items = isOrchestrator ? node.connectedAgents : node.tools;
             const emptyText = isOrchestrator
-              ? (node.hasSpec ? "(no connected operators)" : "(generate spec to see connections)")
+              ? (node.hasSpec ? "(no connected agents)" : "(generate spec to see connections)")
               : "(no tools yet)";
 
             return (
@@ -331,7 +331,7 @@ export default function AgentMap() {
                   {statusLabel}
                 </text>
 
-                {/* Section: Tools or Connected Operators */}
+                {/* Section: Tools or Connected Agents */}
                 <text x={node.x + 16} y={node.y + CARD_HEADER} fontSize={10} fill="#A9A9A9"
                   fontWeight={600} letterSpacing="0.05em">{sectionLabel}</text>
                 {items.length > 0 ? items.map((item, ti) => {

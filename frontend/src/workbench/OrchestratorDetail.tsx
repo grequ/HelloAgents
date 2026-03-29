@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import type { AgentConfig, InteractionAsk, SpecConfig, Agent } from "../types";
 import {
-  useAgent, useUseCases, useInteractions, useOperators, useAllTools,
+  useAgent, useAgents, useUseCases, useInteractions, useAllTools,
   useDeleteUseCase, useDeleteAgent,
   useGenerateSpec, useSaveAgentConfig, useSaveInteractions,
 } from "./queries";
@@ -35,7 +35,7 @@ export default function OrchestratorDetail() {
   const { data: agent, isLoading: agentLoading } = useAgent(id!);
   const { data: useCases = [], isLoading: ucLoading } = useUseCases(id!);
   const { data: interactions } = useInteractions(id!);
-  const { data: operators = [] } = useOperators();
+  const { data: allAgents = [] } = useAgents();
   const { data: allTools = [] } = useAllTools();
 
   const deleteUc = useDeleteUseCase();
@@ -114,24 +114,24 @@ export default function OrchestratorDetail() {
     toolsByOperator.set(tool.agent_id, list);
   }
 
-  const availableOperators = operators.filter(
-    (op) => op.id !== id && !connectedOps.some((c) => c.target_agent_id === op.id)
+  const availableAgents = allAgents.filter(
+    (a) => a.id !== id && !connectedOps.some((c) => c.target_agent_id === a.id)
   );
 
-  // --- Operators ---
+  // --- Connected Agents ---
 
-  function addOperator() {
-    if (availableOperators.length === 0) return;
-    const op = availableOperators[0];
-    setConnectedOps([...connectedOps, { target_agent_id: op.id, target_agent_name: op.name, use_case_ids: [] }]);
+  function addAgent() {
+    if (availableAgents.length === 0) return;
+    const a = availableAgents[0];
+    setConnectedOps([...connectedOps, { target_agent_id: a.id, target_agent_name: a.name, use_case_ids: [] }]);
     setDirty(true);
   }
 
-  function updateOperator(idx: number, opId: string) {
-    const op = operators.find((o) => o.id === opId);
-    if (!op) return;
+  function updateConnectedAgent(idx: number, agentId: string) {
+    const a = allAgents.find((o) => o.id === agentId);
+    if (!a) return;
     const updated = [...connectedOps];
-    updated[idx] = { target_agent_id: op.id, target_agent_name: op.name, use_case_ids: [] };
+    updated[idx] = { target_agent_id: a.id, target_agent_name: a.name, use_case_ids: [] };
     setConnectedOps(updated);
     setDirty(true);
   }
@@ -147,12 +147,12 @@ export default function OrchestratorDetail() {
     setImproving(field);
     try {
       const currentValue = field === "persona" ? config.agent_persona : config.additional_context;
-      const operatorNames = connectedOps.map((c) => c.target_agent_name).join(", ");
+      const connectedNames = connectedOps.map((c) => c.target_agent_name).join(", ");
       const toolNames = connectedOps.flatMap((c) => (toolsByOperator.get(c.target_agent_id) || []).map((t) => t.name)).join(", ");
 
       const prompt = field === "persona"
-        ? `Improve this agent persona for an orchestrator named "${config.agent_name}" that connects to operators: ${operatorNames}. Available tools: ${toolNames}. Use cases: ${useCases.map((u) => u.name).join(", ")}.\n\nCurrent persona:\n${currentValue || "(empty)"}\n\nWrite a clear, specific persona following best practices: define the role, boundaries, tone, what it can/cannot do, how it decides which operator to call, error handling behavior. Be concise but complete.`
-        : `Improve this additional context for an orchestrator named "${config.agent_name}" that connects to operators: ${operatorNames}. Available tools: ${toolNames}.\n\nCurrent context:\n${currentValue || "(empty)"}\n\nAdd relevant details: routing logic between operators, escalation rules, rate limits, business constraints, data handling policies. Be specific and actionable.`;
+        ? `Improve this agent persona for an orchestrator named "${config.agent_name}" that connects to agents: ${connectedNames}. Available tools: ${toolNames}. Use cases: ${useCases.map((u) => u.name).join(", ")}.\n\nCurrent persona:\n${currentValue || "(empty)"}\n\nWrite a clear, specific persona following best practices: define the role, boundaries, tone, what it can/cannot do, how it decides which agent to call, error handling behavior. Be concise but complete.`
+        : `Improve this additional context for an orchestrator named "${config.agent_name}" that connects to agents: ${connectedNames}. Available tools: ${toolNames}.\n\nCurrent context:\n${currentValue || "(empty)"}\n\nAdd relevant details: routing logic between agents, escalation rules, rate limits, business constraints, data handling policies. Be specific and actionable.`;
 
       const suggestion = await suggestUseCase(id!, "improve-" + field, prompt);
       const improved = suggestion.trigger_text || suggestion.expected_output || "";
@@ -278,21 +278,32 @@ export default function OrchestratorDetail() {
         </div>
       </div>
 
-      {/* Section B: Connected Operators (below behavior) */}
+      {/* Section B: Connected Agents (operators and/or other orchestrators) */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
-        <h3 className="font-semibold text-text-primary mb-4">Connected Operators</h3>
+        <h3 className="font-semibold text-text-primary mb-4">Connected Agents</h3>
         <div className="space-y-3">
           {connectedOps.map((conn, idx) => {
             const usedIds = connectedOps.filter((_, i) => i !== idx).map((c) => c.target_agent_id);
-            const options = operators.filter((op) => op.id !== id && !usedIds.includes(op.id));
+            const options = allAgents.filter((a) => a.id !== id && !usedIds.includes(a.id));
             const tools = toolsByOperator.get(conn.target_agent_id) || [];
+            const targetAgent = allAgents.find((a) => a.id === conn.target_agent_id);
+            const isTargetOrchestrator = targetAgent?.agent_role === "orchestrator";
 
             return (
               <div key={idx} className="bg-gray-50 rounded-lg p-4 border border-gray-200">
                 <div className="flex items-center gap-2 mb-2">
-                  <select className={`${inp} w-auto flex-1`} value={conn.target_agent_id} onChange={(e) => updateOperator(idx, e.target.value)}>
-                    {options.map((op) => <option key={op.id} value={op.id}>{op.name}</option>)}
+                  <select className={`${inp} w-auto flex-1`} value={conn.target_agent_id} onChange={(e) => updateConnectedAgent(idx, e.target.value)}>
+                    {options.map((a) => (
+                      <option key={a.id} value={a.id}>
+                        {a.name} ({a.agent_role})
+                      </option>
+                    ))}
                   </select>
+                  {targetAgent && (
+                    <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium shrink-0 ${
+                      isTargetOrchestrator ? "bg-purple-100 text-purple-700" : "bg-blue-100 text-blue-700"
+                    }`}>{targetAgent.agent_role}</span>
+                  )}
                   <button className={btnGhostDanger} onClick={() => removeOperator(idx)}>Remove</button>
                 </div>
                 {tools.length > 0 ? (
@@ -306,22 +317,24 @@ export default function OrchestratorDetail() {
                       ))}
                     </div>
                   </div>
+                ) : isTargetOrchestrator ? (
+                  <p className="text-xs text-gray-400">Orchestrator — delegates through its own connected agents.</p>
                 ) : (
-                  <p className="text-xs text-gray-400">No tools discovered yet. Complete use cases and discover tools on this operator's detail page first.</p>
+                  <p className="text-xs text-gray-400">No tools discovered yet. Complete use cases and discover tools on this agent's detail page first.</p>
                 )}
               </div>
             );
           })}
           {connectedOps.length === 0 && (
-            <p className="text-xs text-gray-400 py-2">No operators connected. Connect operators that this orchestrator delegates to.</p>
+            <p className="text-xs text-gray-400 py-2">No agents connected. Connect operators or other orchestrators that this orchestrator delegates to.</p>
           )}
         </div>
-        {availableOperators.length > 0 ? (
-          <button className={`${btnGhost} mt-3`} onClick={addOperator}>+ Connect Operator</button>
-        ) : operators.filter((op) => op.id !== id).length === 0 ? (
-          <p className="text-xs text-gray-400 mt-3">No operators available. Create operator agents first.</p>
+        {availableAgents.length > 0 ? (
+          <button className={`${btnGhost} mt-3`} onClick={addAgent}>+ Connect Agent</button>
+        ) : allAgents.filter((a) => a.id !== id).length === 0 ? (
+          <p className="text-xs text-gray-400 mt-3">No agents available. Create agents first.</p>
         ) : connectedOps.length > 0 ? (
-          <p className="text-xs text-gray-400 mt-3">All available operators connected.</p>
+          <p className="text-xs text-gray-400 mt-3">All available agents connected.</p>
         ) : null}
       </div>
 
