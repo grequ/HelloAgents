@@ -179,3 +179,132 @@ Return a JSON array of use case objects. Return ONLY the JSON array, no markdown
         raise ValueError("Expected JSON array of use cases")
 
     return use_cases
+
+
+def _build_connected_agents_context(connected_agents: list[dict], all_tools: list[dict], all_use_cases: list[dict]) -> str:
+    """Build a rich context of what connected agents can do."""
+    lines = []
+    for ag in connected_agents:
+        role = ag.get("agent_role", "operator")
+        lines.append(f"### {ag['name']} ({role})")
+        lines.append(f"Description: {ag.get('description', 'No description')}")
+
+        # Tools for this agent
+        agent_tools = [t for t in all_tools if t.get("agent_id") == ag["id"]]
+        if agent_tools:
+            lines.append(f"Tools ({len(agent_tools)}):")
+            for t in agent_tools:
+                lines.append(f"  - {t['name']}: {t.get('description', '')}")
+
+        # Completed use cases for this agent
+        agent_ucs = [uc for uc in all_use_cases if uc.get("agent_id") == ag["id"] and uc.get("status") == "completed"]
+        if agent_ucs:
+            lines.append(f"Completed use cases ({len(agent_ucs)}):")
+            for uc in agent_ucs:
+                lines.append(f"  - {uc['name']}: {uc.get('description', '')}")
+                if uc.get("trigger_text"):
+                    lines.append(f"    Trigger: {uc['trigger_text']}")
+
+        # API spec summary (brief)
+        spec = ag.get("api_spec")
+        if spec and isinstance(spec, list):
+            lines.append(f"MCP tools available: {len(spec)}")
+        elif spec and isinstance(spec, dict) and "paths" in spec:
+            lines.append(f"API endpoints available: {len(spec['paths'])}")
+
+        lines.append("")
+
+    return "\n".join(lines) if lines else "No connected agents."
+
+
+async def discover_orchestrator_use_cases(
+    agent: dict,
+    connected_agents: list[dict],
+    all_tools: list[dict],
+    all_use_cases: list[dict],
+) -> list[dict]:
+    """Generate use cases for an orchestrator based on its connected agents' capabilities."""
+
+    agents_context = _build_connected_agents_context(connected_agents, all_tools, all_use_cases)
+    persona = ""
+    if agent.get("agent_config"):
+        config = agent["agent_config"]
+        if isinstance(config, dict):
+            persona = config.get("agent_persona", "")
+
+    prompt = f"""You are a senior business consultant designing end-to-end user scenarios for
+an AI orchestrator agent. This orchestrator delegates work to connected agents (operators and
+other orchestrators) to serve end-user requests.
+
+## Orchestrator Under Analysis
+
+**Name:** {agent.get('name', 'Unknown')}
+**Description:** {agent.get('description', 'No description')}
+**Persona:** {persona or 'Not defined'}
+
+## Connected Agents and Their Capabilities
+
+{agents_context}
+
+## Your Task
+
+First, deeply understand what each connected agent can do — its tools, its completed use cases,
+its data domain. Then think about what end-to-end user scenarios become possible when these
+agents work together through this orchestrator.
+
+Generate use cases with this priority:
+
+1. **Cross-agent workflows** (HIGHEST priority) — scenarios that require 2+ connected agents
+   working together (e.g. "look up order from OrderManagement, then get product details from
+   ProductCatalog to assess return eligibility")
+2. **Single-agent delegations** — straightforward scenarios that route to one agent
+3. **Aggregation scenarios** — scenarios that query multiple agents and combine results
+4. **Error handling & escalation** — what happens when an agent can't handle the request
+5. **Complex multi-step orchestrations** — scenarios with conditional routing
+   (e.g. "if product is in stock, create order; if not, check alternatives")
+
+For each use case, provide:
+- **name**: Clear, action-oriented, from the end-user's perspective
+- **description**: 1-2 sentences explaining which agents are involved and why
+- **trigger_text**: The exact user message that triggers this
+- **user_input**: What the user provides
+- **expected_output**: What the orchestrator delivers back (combining data from multiple agents)
+- **frequency**: Realistic estimate
+- **sample_conversation**: A realistic 3-4 turn dialogue showing the orchestrator coordinating:
+  User: ...
+  Agent: (routes to OperatorA, then OperatorB) ...
+  User: ...
+  Agent: ...
+
+Generate between 5 and 12 use cases. Focus on scenarios that demonstrate the VALUE of having
+an orchestrator — don't just repeat individual operator use cases.
+
+Return a JSON array of use case objects. Return ONLY the JSON array, no markdown fences."""
+
+    response = client.messages.create(
+        model="claude-opus-4-6",
+        max_tokens=16000,
+        messages=[{"role": "user", "content": prompt}],
+    )
+
+    if not response.content:
+        raise ValueError("Empty response from AI")
+
+    text = response.content[0].text.strip()
+    text = re.sub(r'^```json\s*', '', text)
+    text = re.sub(r'\s*```$', '', text)
+
+    try:
+        use_cases = json.loads(text)
+    except json.JSONDecodeError:
+        start = text.find("[")
+        end = text.rfind("]")
+        if start != -1 and end != -1:
+            use_cases = json.loads(text[start:end + 1])
+        else:
+            raise ValueError("Failed to parse AI response as JSON array")
+
+    if not isinstance(use_cases, list):
+        raise ValueError("Expected JSON array of use cases")
+
+    return use_cases

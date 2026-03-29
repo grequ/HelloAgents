@@ -126,8 +126,8 @@ export default function Dashboard() {
           setDiscoveredTools(result.tools);
           setExtForm((f) => ({
             ...f,
-            name: f.name || result.server_name || "External MCP Agent",
-            description: f.description || result.server_description || "",
+            name: result.server_name || f.name || "External MCP Agent",
+            description: result.server_description || f.description || "",
           }));
         } else {
           setDiscoverError(result.error || "Failed to connect");

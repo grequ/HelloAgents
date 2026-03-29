@@ -1416,6 +1416,59 @@ The "Connected Agents" section in orchestrator detail shows all agents
 (operators and orchestrators) with role badges, and the spec generator
 produces code that handles both connection types.
 
+### Orchestrator Use Case Discovery
+
+Operators discover use cases from their API spec. Orchestrators discover use
+cases from their **connected agents' capabilities** — the tools, use cases, and
+data available across all connected operators and sub-orchestrators.
+
+**Backend endpoint:** `POST /agents/{agent_id}/discover-use-cases`
+(Same endpoint as operators, but detection is automatic based on `agent_role`)
+
+**How it works:**
+1. Gather all connected agents (operators + orchestrators)
+2. For each connected agent: collect its tools, completed use cases, and description
+3. Send to Claude Opus with a prompt that acts as a senior business consultant:
+   - "Given these connected agents and their capabilities, what end-to-end
+     user scenarios can this orchestrator serve?"
+   - Focus on cross-agent workflows (scenarios that require 2+ operators)
+   - Include single-agent delegation scenarios too
+   - Consider composite operations, error handling, escalation
+4. Create each generated use case and mark it as completed immediately
+   (orchestrator use cases don't need discovery/testing)
+
+**Example:** An orchestrator connected to ProductCatalog, OrderManagement, and
+CustomerSupport operators would generate use cases like:
+- "Handle product return" (queries order → checks product eligibility → initiates return)
+- "Full order status check" (queries order → gets customer context → summarizes)
+- "Product recommendation from order history" (gets past orders → searches catalog)
+
+### Orchestrator Routing Test
+
+Operators validate use cases by calling real APIs. Orchestrators validate use
+cases by **simulating routing decisions** — given a user message, which
+connected agent(s) would the orchestrator delegate to, and in what order?
+
+**How it works:**
+1. User clicks "Test Routing" on an orchestrator use case
+2. Backend sends the use case (trigger, user input, expected output) plus the
+   full context (connected agents, their tools, persona, additional context)
+   to Claude
+3. Claude simulates the orchestrator's decision-making and returns:
+   - `routing_decision`: which agent(s) to call and why
+   - `tool_calls`: which specific tools would be invoked, in what order
+   - `expected_flow`: step-by-step narrative of the orchestration
+   - `confidence`: how well the routing matches the use case intent
+   - `issues`: any ambiguity, missing tools, or routing conflicts
+4. Result is saved as a test result, advancing status to "tested"
+
+This is not a live API call — it's a **reasoning test** that validates the
+orchestrator's routing logic is sound before generating code.
+
+**Frontend:** The orchestrator Use Case page (Playground.tsx) shows a
+"Test Routing" button (instead of the operator's "Run Test"). Results display
+as a routing flow diagram instead of API response JSON.
+
 ### Future: Level 2 — Agent Registry (not built yet)
 
 Running agents register themselves with AgentForge, enabling:

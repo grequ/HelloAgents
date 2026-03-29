@@ -282,6 +282,19 @@ export async function removeEndpoint(agentId: string, method: string, path: stri
   return request<Agent>("POST", `/agents/${agentId}/remove-endpoint`, { method, path });
 }
 
+export interface RoutingTestResult {
+  routing_decision: { agent: string; reason: string }[];
+  tool_calls: { agent: string; tool: string; purpose: string; order: number }[];
+  expected_flow: string;
+  confidence: string;
+  issues: string[];
+  success: boolean;
+}
+
+export async function testRouting(agentId: string, useCaseId: string): Promise<RoutingTestResult> {
+  return request<RoutingTestResult>("POST", `/agents/${agentId}/test-routing`, { use_case_id: useCaseId });
+}
+
 export async function discoverUseCases(agentId: string): Promise<{ created: number; use_cases: UseCase[] }> {
   return request<{ created: number; use_cases: UseCase[] }>("POST", `/agents/${agentId}/discover-use-cases`);
 }

@@ -6,7 +6,8 @@ import {
   useDeleteUseCase, useDeleteAgent,
   useGenerateSpec, useSaveAgentConfig, useSaveInteractions,
 } from "./queries";
-import { suggestUseCase } from "./api";
+import { suggestUseCase, discoverUseCases } from "./api";
+import { useQueryClient } from "@tanstack/react-query";
 import { btnPrimary, btnSecondary, btnDanger, btnGhost, btnGhostDanger, btnGhostCyan, inp } from "./ui";
 
 // --- Auto-sizing textarea ---
@@ -32,6 +33,7 @@ function AutoTextarea({ value, onChange, placeholder, className }: {
 export default function OrchestratorDetail() {
   const { id } = useParams<{ id: string }>();
   const nav = useNavigate();
+  const qc = useQueryClient();
   const { data: agent, isLoading: agentLoading } = useAgent(id!);
   const { data: useCases = [], isLoading: ucLoading } = useUseCases(id!);
   const { data: interactions } = useInteractions(id!);
@@ -47,6 +49,7 @@ export default function OrchestratorDetail() {
   const [saved, setSaved] = useState(false);
   const [dirty, setDirty] = useState(false);
   const [improving, setImproving] = useState<"persona" | "context" | null>(null);
+  const [discoveringUcs, setDiscoveringUcs] = useState(false);
 
   // Config state
   const [config, setConfig] = useState({ agent_name: "", agent_persona: "", additional_context: "" });
@@ -223,6 +226,23 @@ export default function OrchestratorDetail() {
     }
   };
 
+  const handleDiscoverUseCases = async () => {
+    if (!id) return;
+    // Save config first if dirty
+    if (dirty) await handleSave();
+    setDiscoveringUcs(true);
+    try {
+      const result = await discoverUseCases(id);
+      qc.invalidateQueries({ queryKey: ["useCases", id] });
+      qc.invalidateQueries({ queryKey: ["dashboard"] });
+      alert(`Created ${result.created} use cases from connected agents' capabilities.`);
+    } catch (e: unknown) {
+      alert("Discovery failed: " + (e instanceof Error ? e.message : "Unknown error"));
+    } finally {
+      setDiscoveringUcs(false);
+    }
+  };
+
   if (agentLoading || ucLoading) return <p className="text-sm text-gray-500">Loading...</p>;
   if (!agent) return <p className="text-sm text-gray-500">Agent not found</p>;
 
@@ -342,8 +362,24 @@ export default function OrchestratorDetail() {
       <div>
         <div className="flex items-center justify-between mb-3">
           <h3 className="font-semibold text-text-primary">Use Cases ({useCases.length})</h3>
-          <Link to={`/workbench/agents/${id}/usecases/new`} className={btnPrimary}>+ Add Use Case</Link>
+          <div className="flex gap-2">
+            {connectedOps.length > 0 && (
+              <button className={btnSecondary} onClick={handleDiscoverUseCases} disabled={discoveringUcs}>
+                {discoveringUcs ? "Discovering..." : "Discover Use Cases"}
+              </button>
+            )}
+            <Link to={`/workbench/agents/${id}/usecases/new`} className={btnPrimary}>+ Add Use Case</Link>
+          </div>
         </div>
+        {discoveringUcs && (
+          <div className="bg-tedee-cyan/5 border border-tedee-cyan/20 rounded-lg px-4 py-3 mb-3 flex items-center gap-3">
+            <svg className="animate-spin h-4 w-4 text-tedee-navy" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>
+            <div>
+              <p className="text-sm font-medium text-tedee-navy">AI is analyzing connected agents...</p>
+              <p className="text-xs text-gray-500">Generating cross-agent use cases and testing routing logic. This may take a minute.</p>
+            </div>
+          </div>
+        )}
         <div className="space-y-2">
           {useCases.map((uc) => (
             <div key={uc.id} className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">

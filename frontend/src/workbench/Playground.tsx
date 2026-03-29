@@ -6,7 +6,7 @@ import {
   useDiscover, useRunTest, useSaveDiscovery, useDeleteUseCase,
   useCompleteUseCase,
 } from "./queries";
-import { suggestUseCase, generateTestInput } from "./api";
+import { suggestUseCase, generateTestInput, testRouting, type RoutingTestResult } from "./api";
 import { btnPrimary, btnSecondary, btnDanger, btnGhost, inp } from "./ui";
 
 const STAGES = ["draft", "discovered", "tested", "completed"] as const;
@@ -92,6 +92,10 @@ export default function Playground() {
   const [testInputStr, setTestInputStr] = useState("");
   const [testResult, setTestResult] = useState<Record<string, unknown> | null>(null);
   const [generatingInput, setGeneratingInput] = useState(false);
+
+  // Routing test state (orchestrator only)
+  const [routingResult, setRoutingResult] = useState<RoutingTestResult | null>(null);
+  const [routingTesting, setRoutingTesting] = useState(false);
 
   const anyDirty = ucDirty || discDirty;
 
@@ -296,6 +300,21 @@ export default function Playground() {
     }
   };
 
+  const handleTestRouting = async () => {
+    if (!agentId || !ucId || isNew) return;
+    setRoutingTesting(true);
+    setRoutingResult(null);
+    try {
+      const result = await testRouting(agentId, ucId);
+      setRoutingResult(result);
+      refetchUc();
+    } catch (e: unknown) {
+      alert("Routing test failed: " + (e instanceof Error ? e.message : "Unknown error"));
+    } finally {
+      setRoutingTesting(false);
+    }
+  };
+
   if (!agent || (!isNew && !uc)) return <p className="text-sm text-gray-500">Loading...</p>;
 
   const isOrchestrator = agent.agent_role === "orchestrator";
@@ -319,6 +338,7 @@ export default function Playground() {
     onDelete={async () => { if (confirm("Delete this use case?")) { await deleteUcMut.mutateAsync(ucId!); nav(`/workbench/agents/${agentId}`); } }}
     onMarkComplete={handleMarkComplete} onImprove={handleImprove}
     onGenerateDraft={handleGenerateDraft}
+    onTestRouting={handleTestRouting} routingTesting={routingTesting} routingResult={routingResult}
   />;
 
   /* ═══════════════════════════════════════════════════════════════
@@ -607,7 +627,7 @@ export default function Playground() {
 
 /* ═══════════════════════════════════════════════════════════════════════
    ORCHESTRATOR USE CASE
-   Clean, focused layout: Definition → Complete. No discovery, no testing.
+   Focused layout: Definition + Routing Test → Complete.
    ═══════════════════════════════════════════════════════════════════════ */
 
 function OrchestratorPlayground({
@@ -616,6 +636,7 @@ function OrchestratorPlayground({
   createPending, completePending,
   setField, setUcName, setUcDesc, setUcTrigger, setUcInput, setUcOutput, setUcFreq, setUcSampleConv,
   onSave, onCancel, onDelete, onMarkComplete, onImprove, onGenerateDraft,
+  onTestRouting, routingTesting, routingResult,
 }: {
   isNew: boolean; status: string;
   ucName: string; ucDesc: string; ucTrigger: string; ucInput: string;
@@ -633,6 +654,7 @@ function OrchestratorPlayground({
   setUcSampleConv: React.Dispatch<React.SetStateAction<string>>;
   onSave: () => void; onCancel: () => void; onDelete: () => void; onMarkComplete: () => void;
   onImprove: () => void; onGenerateDraft: () => void;
+  onTestRouting: () => void; routingTesting: boolean; routingResult: RoutingTestResult | null;
 }) {
   const isCompleted = status === "completed";
 
@@ -758,6 +780,91 @@ function OrchestratorPlayground({
           </button>
         </div>
       </div>
+
+      {/* Routing Test — orchestrator equivalent of Live Test */}
+      {!isNew && (
+        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 mt-4">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="font-semibold text-text-primary text-sm">Routing Test</h3>
+            <button
+              className={`inline-flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-md transition-colors ${
+                !routingTesting && ucName.trim() ? "text-white bg-tedee-navy hover:bg-tedee-navy/90" : "text-gray-400 bg-gray-100 cursor-not-allowed"
+              }`}
+              onClick={onTestRouting} disabled={routingTesting || !ucName.trim()}
+            >
+              {routingTesting ? <><Spinner /> Testing...</> : "Test Routing"}
+            </button>
+          </div>
+          <p className="text-xs text-gray-400 mb-3">Simulates how the orchestrator would route this use case to connected agents.</p>
+
+          {routingResult && (
+            <div className="space-y-3">
+              {/* Confidence */}
+              <div className="flex items-center gap-2">
+                <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold ${
+                  routingResult.confidence === "high" ? "bg-emerald-100 text-emerald-700" :
+                  routingResult.confidence === "medium" ? "bg-amber-100 text-amber-700" :
+                  "bg-red-100 text-red-700"
+                }`}>{routingResult.confidence} confidence</span>
+                {routingResult.success && <span className="text-[10px] text-emerald-600 font-medium">Routing valid</span>}
+                {!routingResult.success && <span className="text-[10px] text-red-600 font-medium">Issues found</span>}
+              </div>
+
+              {/* Routing decisions */}
+              {routingResult.routing_decision.length > 0 && (
+                <div>
+                  <h4 className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Routes To</h4>
+                  <div className="space-y-1">
+                    {routingResult.routing_decision.map((r, i) => (
+                      <div key={i} className="flex items-start gap-2 text-xs">
+                        <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-purple-100 text-purple-700 shrink-0">{r.agent}</span>
+                        <span className="text-gray-500">{r.reason}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Tool calls */}
+              {routingResult.tool_calls.length > 0 && (
+                <div>
+                  <h4 className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Tool Calls</h4>
+                  <div className="space-y-1">
+                    {routingResult.tool_calls.map((t, i) => (
+                      <div key={i} className="flex items-center gap-2 text-xs">
+                        <span className="text-gray-400 w-4">{t.order}.</span>
+                        <span className="font-mono text-[10px] px-1.5 py-0.5 rounded bg-blue-50 text-blue-700">{t.agent}</span>
+                        <span className="font-mono text-text-primary">{t.tool}</span>
+                        <span className="text-gray-400">— {t.purpose}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Expected flow */}
+              {routingResult.expected_flow && (
+                <div>
+                  <h4 className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-1">Expected Flow</h4>
+                  <p className="text-xs text-gray-600 bg-gray-50 rounded-lg p-3 border border-gray-200">{routingResult.expected_flow}</p>
+                </div>
+              )}
+
+              {/* Issues */}
+              {routingResult.issues.length > 0 && (
+                <div>
+                  <h4 className="text-[10px] font-semibold text-red-500 uppercase tracking-wider mb-1">Issues</h4>
+                  <ul className="text-xs text-red-600 space-y-0.5">
+                    {routingResult.issues.map((issue, i) => (
+                      <li key={i}>- {issue}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

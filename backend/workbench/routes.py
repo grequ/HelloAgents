@@ -19,7 +19,8 @@ from workbench.discovery import discover
 from workbench.tester import run_test
 from workbench.spec_generator import generate
 from workbench.project_exporter import export_project
-from workbench.usecase_discoverer import discover_use_cases
+from workbench.usecase_discoverer import discover_use_cases, discover_orchestrator_use_cases
+from workbench.routing_tester import test_routing
 
 router = APIRouter(prefix="/workbench", tags=["workbench"])
 
@@ -252,35 +253,48 @@ async def discover_mcp_agent(body: dict):
         raise HTTPException(400, "url is required")
 
     try:
+        import asyncio
         from mcp.client.sse import sse_client
         from mcp import ClientSession
 
-        async with sse_client(url) as (read_stream, write_stream):
-            async with ClientSession(read_stream, write_stream) as session:
-                init_result = await session.initialize()
-                tools_result = await session.list_tools()
-                tools = []
-                for t in tools_result.tools:
-                    tools.append({
-                        "name": t.name,
-                        "description": t.description or "",
-                        "inputSchema": t.inputSchema if hasattr(t, "inputSchema") else {},
-                    })
-                # Extract server identity from initialize result
-                server_name = ""
-                server_description = ""
-                if init_result.serverInfo:
-                    server_name = init_result.serverInfo.title or init_result.serverInfo.name or ""
-                server_description = init_result.instructions or ""
-                return {
-                    "ok": True,
-                    "tools": tools,
-                    "tool_count": len(tools),
-                    "server_name": server_name,
-                    "server_description": server_description,
-                }
-    except Exception as e:
-        return {"ok": False, "error": str(e)}
+        async def _discover():
+            async with sse_client(url) as (read_stream, write_stream):
+                async with ClientSession(read_stream, write_stream) as session:
+                    init_result = await session.initialize()
+                    tools_result = await session.list_tools()
+                    tools = []
+                    for t in tools_result.tools:
+                        tools.append({
+                            "name": t.name,
+                            "description": t.description or "",
+                            "inputSchema": t.inputSchema if hasattr(t, "inputSchema") else {},
+                        })
+                    server_name = ""
+                    server_description = ""
+                    si = init_result.serverInfo
+                    if si:
+                        server_name = (getattr(si, "title", None) or getattr(si, "name", None) or "")
+                    server_description = (getattr(init_result, "instructions", None) or "")
+                    return {
+                        "ok": True,
+                        "tools": tools,
+                        "tool_count": len(tools),
+                        "server_name": server_name,
+                        "server_description": server_description,
+                    }
+
+        return await asyncio.wait_for(_discover(), timeout=15.0)
+    except asyncio.TimeoutError:
+        return {"ok": False, "error": f"Connection timed out after 15s — is the MCP server running at {url}?"}
+    except BaseException as e:
+        # BaseException catches ExceptionGroup from anyio TaskGroup failures
+        msg = str(e)
+        if "ExceptionGroup" in type(e).__name__ or "TaskGroup" in type(e).__name__:
+            # Extract the actual sub-exception message
+            subs = getattr(e, "exceptions", [])
+            if subs:
+                msg = "; ".join(str(s) for s in subs)
+        return {"ok": False, "error": f"Failed to connect to MCP server: {msg}"}
 
 
 @router.post("/fetch-url")
@@ -616,25 +630,44 @@ async def complete_use_case(uc_id: str):
 
 @router.post("/agents/{agent_id}/discover-use-cases")
 async def discover_use_cases_endpoint(agent_id: str):
-    """AI-powered pipeline: analyze operator → generate use cases → discover endpoints → live test each."""
+    """AI-powered pipeline: analyze agent → generate use cases → discover/test each.
+    Works for both operators (spec-based) and orchestrators (connected-agents-based)."""
     agent = await wb_db.get_agent(agent_id)
     if not agent:
         raise HTTPException(404, "Agent not found")
-    if not agent.get("api_spec"):
+
+    is_orchestrator = agent.get("agent_role") == "orchestrator"
+
+    if not is_orchestrator and not agent.get("api_spec"):
         raise HTTPException(400, "Upload an API spec first")
 
-    has_api_key = bool(await wb_db.get_agent_api_key_enc(agent_id))
-    has_base_url = bool(agent.get("api_base_url"))
-
-    # Phase 1+2: AI generates use cases from spec analysis
+    # --- Generate use cases ---
     try:
-        raw_use_cases = await discover_use_cases(agent)
+        if is_orchestrator:
+            # Gather connected agents, their tools, and use cases
+            interactions = await wb_db.get_interactions(agent_id)
+            connected_agents = []
+            for ask in interactions.get("asks", []):
+                target = await wb_db.get_agent(ask.get("target_agent_id", ""))
+                if target:
+                    connected_agents.append(target)
+            if not connected_agents:
+                raise HTTPException(400, "Connect agents first — the orchestrator needs connected agents to discover use cases from")
+            all_tools_list = await wb_db.list_all_tools()
+            all_ucs = []
+            for ca in connected_agents:
+                all_ucs.extend(await wb_db.list_use_cases(ca["id"]))
+            raw_use_cases = await discover_orchestrator_use_cases(agent, connected_agents, all_tools_list, all_ucs)
+        else:
+            raw_use_cases = await discover_use_cases(agent)
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(500, f"Use case generation failed: {str(e)}")
 
+    # --- Save and process each use case ---
     created = []
     for uc_data in raw_use_cases:
-        # Phase 2b: Save each use case
         try:
             uc = await wb_db.create_use_case(agent_id, {
                 "name": uc_data.get("name", "Unnamed"),
@@ -648,57 +681,113 @@ async def discover_use_cases_endpoint(agent_id: str):
         except Exception:
             continue
 
-        # Phase 3: Run Self-Discovery on each use case
-        try:
-            disc_result = await discover(agent["api_spec"], uc)
-            await wb_db.save_discovery(
-                uc["id"],
-                disc_result.get("endpoints", []),
-                disc_result.get("behavior", ""),
-            )
-            uc = await wb_db.get_use_case(uc["id"])
-        except Exception:
-            pass  # Discovery failed — use case still saved as draft
-
-        # Phase 4: Run Live Test if we have base_url and discovered endpoints
-        if has_base_url and uc.get("discovered_endpoints"):
+        if is_orchestrator:
+            # Orchestrator: run routing test, then mark complete
             try:
-                key_enc = await wb_db.get_agent_api_key_enc(agent_id)
-                api_key = decrypt_api_key(key_enc) if key_enc else ""
-
-                # Build test input from user_input field
-                test_input = {}
-                user_input_text = (uc.get("user_input") or "").lower()
-                if "id" in user_input_text:
-                    test_input["id"] = 1
-                if "name" in user_input_text:
-                    test_input["name"] = "test"
-                if "query" in user_input_text or "search" in user_input_text or "keyword" in user_input_text:
-                    test_input["q"] = "test"
-                if not test_input:
-                    test_input["q"] = "test"
-
-                result = await run_test(
-                    base_url=agent["api_base_url"],
-                    api_key=api_key,
-                    auth_type=agent.get("api_auth_type", "bearer"),
-                    auth_config=agent.get("api_auth_config"),
-                    endpoints=uc["discovered_endpoints"],
-                    user_input=test_input,
-                    use_case=uc,
-                )
+                interactions = await wb_db.get_interactions(agent_id)
+                connected_agents = []
+                for ask in interactions.get("asks", []):
+                    target = await wb_db.get_agent(ask.get("target_agent_id", ""))
+                    if target:
+                        connected_agents.append(target)
+                all_tools_list = await wb_db.list_all_tools()
+                routing_result = await test_routing(uc, agent, connected_agents, all_tools_list)
                 await wb_db.save_test_result(uc["id"], {
                     "timestamp": datetime.now(timezone.utc).isoformat(),
-                    "input": test_input,
-                    **result,
+                    "routing": True,
+                    **routing_result,
                 })
+                # Mark complete if routing test passed
+                if routing_result.get("success"):
+                    await wb_db.update_use_case(uc["id"], {"status": "completed"})
             except Exception:
-                pass  # Test failed — use case still has discovery data
+                pass
+        else:
+            # Operator: run discovery → live test
+            try:
+                disc_result = await discover(agent["api_spec"], uc)
+                await wb_db.save_discovery(
+                    uc["id"],
+                    disc_result.get("endpoints", []),
+                    disc_result.get("behavior", ""),
+                )
+                uc = await wb_db.get_use_case(uc["id"])
+            except Exception:
+                pass
+
+            has_base_url = bool(agent.get("api_base_url"))
+            if has_base_url and uc.get("discovered_endpoints"):
+                try:
+                    key_enc = await wb_db.get_agent_api_key_enc(agent_id)
+                    api_key = decrypt_api_key(key_enc) if key_enc else ""
+                    test_input = {}
+                    user_input_text = (uc.get("user_input") or "").lower()
+                    if "id" in user_input_text:
+                        test_input["id"] = 1
+                    if "name" in user_input_text:
+                        test_input["name"] = "test"
+                    if "query" in user_input_text or "search" in user_input_text or "keyword" in user_input_text:
+                        test_input["q"] = "test"
+                    if not test_input:
+                        test_input["q"] = "test"
+                    result = await run_test(
+                        base_url=agent["api_base_url"],
+                        api_key=api_key,
+                        auth_type=agent.get("api_auth_type", "bearer"),
+                        auth_config=agent.get("api_auth_config"),
+                        endpoints=uc["discovered_endpoints"],
+                        user_input=test_input,
+                        use_case=uc,
+                    )
+                    await wb_db.save_test_result(uc["id"], {
+                        "timestamp": datetime.now(timezone.utc).isoformat(),
+                        "input": test_input,
+                        **result,
+                    })
+                except Exception:
+                    pass
 
         uc = await wb_db.get_use_case(uc["id"])
         created.append(uc)
 
     return {"created": len(created), "use_cases": created}
+
+
+@router.post("/agents/{agent_id}/test-routing")
+async def test_routing_endpoint(agent_id: str, body: dict):
+    """Test an orchestrator's routing decision for a specific use case."""
+    uc_id = body.get("use_case_id", "")
+    if not uc_id:
+        raise HTTPException(400, "use_case_id is required")
+
+    agent = await wb_db.get_agent(agent_id)
+    if not agent:
+        raise HTTPException(404, "Agent not found")
+
+    uc = await wb_db.get_use_case(uc_id)
+    if not uc:
+        raise HTTPException(404, "Use case not found")
+
+    # Gather connected agents and tools
+    interactions = await wb_db.get_interactions(agent_id)
+    connected_agents = []
+    for ask in interactions.get("asks", []):
+        target = await wb_db.get_agent(ask.get("target_agent_id", ""))
+        if target:
+            connected_agents.append(target)
+
+    all_tools_list = await wb_db.list_all_tools()
+
+    result = await test_routing(uc, agent, connected_agents, all_tools_list)
+
+    # Save as test result
+    await wb_db.save_test_result(uc_id, {
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "routing": True,
+        **result,
+    })
+
+    return result
 
 
 @router.post("/suggest-use-case")
