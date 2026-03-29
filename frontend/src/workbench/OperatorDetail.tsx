@@ -7,7 +7,7 @@ import {
   useSetApiKey, useUploadSpec, useTestConnection, useGenerateSpec,
   useTools, useUpdateTool, useDeleteTool, useDiscoverTools,
 } from "./queries";
-import { fetchUrl } from "./api";
+import { fetchUrl, discoverEndpoints, type DiscoveredEndpoint } from "./api";
 import { btnPrimary, btnSecondary, btnDanger, btnGhost, btnGhostDanger, btnGhostCyan, inp } from "./ui";
 
 // --- Tool Card ---
@@ -181,6 +181,8 @@ export default function OperatorDetail() {
   // --- Other handlers ---
 
   const [specLoading, setSpecLoading] = useState(false);
+  const [discovering, setDiscovering] = useState(false);
+  const [discoveredEndpoints, setDiscoveredEndpoints] = useState<DiscoveredEndpoint[] | null>(null);
 
   const handleUploadSpec = async () => {
     const input = specInput.trim();
@@ -208,6 +210,36 @@ export default function OperatorDetail() {
       setDirty(true);
     } catch {
       alert("Invalid JSON.\n\nPaste either:\n• A Swagger/OpenAPI JSON spec\n• A URL to a swagger.json file (e.g. https://petstore.swagger.io/v2/swagger.json)");
+    }
+  };
+
+  const handleDiscoverEndpoints = async () => {
+    const spec = pendingSpec?.spec || (agent?.has_api_spec ? "loaded" : null);
+    if (!spec) return;
+    setDiscovering(true);
+    try {
+      // If we have a pending spec use it, otherwise we need the spec from the backend
+      // The backend already has it if has_api_spec is true, so send a signal
+      let specData = pendingSpec?.spec;
+      if (!specData && agent?.has_api_spec) {
+        // Fetch the spec from the agent — but we don't have it client-side.
+        // The backend discover-endpoints endpoint needs the spec. We'll pass the agent_id instead.
+        // Actually, let's just use the pending spec or re-parse from specInput.
+        const input = specInput.trim();
+        if (input.startsWith("http://") || input.startsWith("https://")) {
+          specData = await fetchUrl(input);
+        } else if (input) {
+          try { specData = JSON.parse(input); } catch { /* ignore */ }
+        }
+      }
+      if (!specData) { alert("Load a spec first to discover endpoints."); setDiscovering(false); return; }
+      const eps = await discoverEndpoints(specData, agent?.name || "");
+      setDiscoveredEndpoints(eps);
+      setDirty(true);
+    } catch (e: unknown) {
+      alert("Discover failed: " + (e instanceof Error ? e.message : "Unknown error"));
+    } finally {
+      setDiscovering(false);
     }
   };
 
@@ -318,29 +350,44 @@ export default function OperatorDetail() {
               )}
             </div>
 
-            {/* Endpoint list */}
-            {agent.api_endpoints && agent.api_endpoints.length > 0 && (
-              <div className="mt-4 pt-4 border-t border-gray-100">
-                <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
-                  {isMcp ? "MCP Tools" : "API Endpoints"} ({agent.api_endpoints.length})
-                </h4>
-                <div className="space-y-1 max-h-[300px] overflow-y-auto">
-                  {agent.api_endpoints.map((ep, i) => (
-                    <div key={i} className="flex items-baseline gap-2 text-xs">
-                      <span className={`font-mono font-semibold px-1.5 py-0.5 rounded text-[10px] ${
-                        ep.method === "GET" ? "bg-green-100 text-green-700" :
-                        ep.method === "POST" ? "bg-blue-100 text-blue-700" :
-                        ep.method === "PUT" ? "bg-amber-100 text-amber-700" :
-                        ep.method === "DELETE" ? "bg-red-100 text-red-700" :
-                        "bg-gray-100 text-gray-700"
-                      }`}>{ep.method}</span>
-                      <span className="font-mono text-text-primary">{ep.path}</span>
-                      {ep.summary && <span className="text-gray-400 truncate">{ep.summary}</span>}
-                    </div>
-                  ))}
-                </div>
+            {/* Discover Endpoints */}
+            {(pendingSpec || agent.has_api_spec) && (
+              <div className="mt-3">
+                <button className={btnGhost} onClick={handleDiscoverEndpoints} disabled={discovering}>
+                  {discovering ? "Discovering..." : discoveredEndpoints ? "Re-discover Endpoints" : "Discover Endpoints"}
+                </button>
               </div>
             )}
+
+            {/* Endpoint list — show AI-discovered or fallback to auto-extracted */}
+            {(() => {
+              const eps = discoveredEndpoints || (agent.api_endpoints && agent.api_endpoints.length > 0 ? agent.api_endpoints : null);
+              if (!eps || eps.length === 0) return null;
+              const isAiDiscovered = !!discoveredEndpoints;
+              return (
+                <div className="mt-4 pt-4 border-t border-gray-100">
+                  <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
+                    {isMcp ? "MCP Tools" : "API Endpoints"} ({eps.length})
+                    {isAiDiscovered && <span className="ml-2 text-tedee-cyan font-normal normal-case">AI-enriched</span>}
+                  </h4>
+                  <div className="space-y-1 max-h-[300px] overflow-y-auto">
+                    {eps.map((ep, i) => (
+                      <div key={i} className="flex items-baseline gap-2 text-xs">
+                        <span className={`font-mono font-semibold px-1.5 py-0.5 rounded text-[10px] shrink-0 ${
+                          ep.method === "GET" ? "bg-green-100 text-green-700" :
+                          ep.method === "POST" ? "bg-blue-100 text-blue-700" :
+                          ep.method === "PUT" || ep.method === "PATCH" ? "bg-amber-100 text-amber-700" :
+                          ep.method === "DELETE" ? "bg-red-100 text-red-700" :
+                          "bg-gray-100 text-gray-700"
+                        }`}>{ep.method}</span>
+                        <span className="font-mono text-text-primary shrink-0">{ep.path}</span>
+                        {ep.summary && <span className="text-gray-400 truncate">{ep.summary}</span>}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })()}
           </>);
         })()}
       </div>

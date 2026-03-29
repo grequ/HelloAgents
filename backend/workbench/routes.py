@@ -202,6 +202,75 @@ async def fetch_url(body: dict):
         raise HTTPException(400, f"Failed to fetch URL: {e}")
 
 
+@router.post("/discover-endpoints")
+async def discover_endpoints(body: dict):
+    """AI-powered endpoint discovery from an API spec."""
+    spec = body.get("spec")
+    agent_name = body.get("agent_name", "")
+    if not spec:
+        raise HTTPException(400, "spec is required")
+
+    import anthropic
+    import os
+    import re
+
+    # Build a compact spec summary
+    lines = []
+    if isinstance(spec, dict) and "paths" in spec:
+        for path, methods in spec["paths"].items():
+            for method, details in methods.items():
+                if method in ("get", "post", "put", "patch", "delete"):
+                    summary = details.get("summary", details.get("description", details.get("operationId", "")))
+                    params = details.get("parameters", [])
+                    param_names = ", ".join(p.get("name", "") for p in params[:5]) if params else ""
+                    lines.append(f"{method.upper()} {path} | summary: {(summary or '')[:80]} | params: {param_names}")
+    elif isinstance(spec, list):
+        # MCP tools
+        for tool in spec:
+            lines.append(f"TOOL {tool.get('name', '')} | {tool.get('description', '')[:80]}")
+
+    if not lines:
+        raise HTTPException(400, "No endpoints found in spec")
+
+    spec_text = "\n".join(lines)
+
+    client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
+    prompt = (
+        f"Analyze these API endpoints for the '{agent_name}' agent and return enriched descriptions.\n\n"
+        f"Raw endpoints:\n{spec_text}\n\n"
+        "Return a JSON array. For each endpoint:\n"
+        '{"method": "GET", "path": "/products", "summary": "one-line description of what this does and when to use it", "is_write": false}\n\n'
+        "Rules:\n"
+        "- summary should be clear, human-readable, 1 sentence\n"
+        "- is_write = true for POST/PUT/PATCH/DELETE that modify data, false for read-only\n"
+        "- Group/order logically (CRUD order per resource)\n"
+        "- Remove internal/admin endpoints that agents shouldn't use\n\n"
+        "Return ONLY a JSON array, no markdown."
+    )
+
+    response = client.messages.create(
+        model="claude-sonnet-4-20250514",
+        max_tokens=4000,
+        messages=[{"role": "user", "content": prompt}],
+    )
+
+    text = response.content[0].text.strip()
+    text = re.sub(r'^```json\s*', '', text)
+    text = re.sub(r'\s*```$', '', text)
+
+    try:
+        endpoints = json.loads(text)
+    except json.JSONDecodeError:
+        start = text.find("[")
+        end = text.rfind("]")
+        if start != -1 and end != -1:
+            endpoints = json.loads(text[start:end + 1])
+        else:
+            raise HTTPException(500, "Failed to parse AI response")
+
+    return endpoints
+
+
 # ---- Agent Tools ----
 
 @router.get("/agents/{agent_id}/tools", response_model=list[AgentToolOut])

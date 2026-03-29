@@ -15,6 +15,7 @@ export default defineConfig({
       "/workbench/fetch-url": "http://localhost:8000",
       "/workbench/test-url": "http://localhost:8000",
       "/workbench/suggest-use-case": "http://localhost:8000",
+      "/workbench/discover-endpoints": "http://localhost:8000",
       "/workbench/discover": "http://localhost:8000",
       "/workbench/test": "http://localhost:8000",
       "/workbench/generate-spec": "http://localhost:8000",

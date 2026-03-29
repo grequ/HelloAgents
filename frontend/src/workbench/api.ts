@@ -170,6 +170,18 @@ export async function suggestUseCase(
   });
 }
 
+// Discover endpoints (AI-powered)
+export interface DiscoveredEndpoint {
+  method: string;
+  path: string;
+  summary: string;
+  is_write?: boolean;
+}
+
+export async function discoverEndpoints(spec: unknown, agentName: string): Promise<DiscoveredEndpoint[]> {
+  return request<DiscoveredEndpoint[]>("POST", "/discover-endpoints", { spec, agent_name: agentName });
+}
+
 // Agent Tools
 export async function listTools(agentId: string): Promise<AgentTool[]> {
   return request<AgentTool[]>("GET", `/agents/${agentId}/tools`);
