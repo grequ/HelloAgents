@@ -21,7 +21,21 @@ def _parse_json_field(value):
 
 
 def _row_to_agent(row: dict) -> dict:
-    row["has_api_key"] = bool(row.pop("api_key_enc", None))
+    key_enc = row.pop("api_key_enc", None)
+    row["has_api_key"] = bool(key_enc)
+    # Store masked preview of the key for display
+    if key_enc:
+        try:
+            from workbench.crypto import decrypt_api_key
+            plain = decrypt_api_key(key_enc)
+            if len(plain) > 12:
+                row["api_key_preview"] = plain[:5] + "..." + plain[-5:]
+            else:
+                row["api_key_preview"] = plain[:3] + "..." + plain[-3:] if len(plain) > 6 else "***"
+        except Exception:
+            row["api_key_preview"] = "***"
+    else:
+        row["api_key_preview"] = None
     spec = _parse_json_field(row.get("api_spec"))
     row["api_spec"] = spec
     row["has_api_spec"] = spec is not None

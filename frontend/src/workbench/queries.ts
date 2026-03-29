@@ -127,6 +127,18 @@ export function useCreateAgent() {
   });
 }
 
+export function useUpdateAgent() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, data }: { id: string; data: Record<string, unknown> }) =>
+      api.updateAgent(id, data),
+    onSuccess: (_data, vars) => {
+      qc.invalidateQueries({ queryKey: keys.agent(vars.id) });
+      qc.invalidateQueries({ queryKey: keys.dashboard });
+    },
+  });
+}
+
 export function useSaveAgentConfig() {
   const qc = useQueryClient();
   return useMutation({

@@ -3,7 +3,7 @@ import { useParams, Link, useNavigate } from "react-router-dom";
 import type { UseCase, AgentTool } from "../types";
 import {
   useAgent, useUseCases,
-  useDeleteUseCase, useDeleteAgent,
+  useDeleteUseCase, useDeleteAgent, useUpdateAgent,
   useSetApiKey, useUploadSpec, useTestConnection, useGenerateSpec,
   useTools, useUpdateTool, useDeleteTool, useDiscoverTools,
 } from "./queries";
@@ -101,13 +101,22 @@ export default function OperatorDetail() {
 
   const deleteUc = useDeleteUseCase();
   const deleteAg = useDeleteAgent();
-  const setApiKey = useSetApiKey();
+  const updateAg = useUpdateAgent();
+  const setApiKeyMut = useSetApiKey();
   const uploadSpec = useUploadSpec();
   const testConn = useTestConnection();
   const genSpec = useGenerateSpec();
 
-  // Forms
+  // Name/description editing
+  const [editName, setEditName] = useState("");
+  const [editDesc, setEditDesc] = useState("");
+  const [nameLoaded, setNameLoaded] = useState(false);
+
+  // API key editing
   const [apiKeyInput, setApiKeyInput] = useState("");
+  const [editingKey, setEditingKey] = useState(false);
+
+  // Spec input
   const [specInput, setSpecInput] = useState("");
 
   // Load saved spec source into textarea
@@ -119,6 +128,20 @@ export default function OperatorDetail() {
       specSourceLoaded.current = true;
     }
   }, [agent]);
+
+  // Load name/description
+  useEffect(() => {
+    if (!agent || nameLoaded) return;
+    setEditName(agent.name || "");
+    setEditDesc(agent.description || "");
+    setNameLoaded(true);
+  }, [agent, nameLoaded]);
+
+  const handleSaveNameDesc = async () => {
+    if (!agent) return;
+    if (editName === agent.name && editDesc === agent.description) return;
+    await updateAg.mutateAsync({ id: id!, data: { name: editName, description: editDesc } });
+  };
 
   // --- Other handlers ---
 
@@ -172,11 +195,9 @@ export default function OperatorDetail() {
       {/* Header */}
       <div className="flex items-start justify-between">
         <div>
-          <h2 className="text-xl font-bold text-text-primary">{agent.name}</h2>
-          <p className="text-sm text-gray-500">{agent.description}</p>
+          <span className="text-[11px] px-2 py-0.5 rounded-full bg-gray-200 text-gray-700 font-medium">{agent.status}</span>
         </div>
         <div className="flex items-center gap-2">
-          <span className="text-[11px] px-2 py-0.5 rounded-full bg-gray-200 text-gray-700 font-medium">{agent.status}</span>
           <button className={btnPrimary} onClick={handleGenerate} disabled={genSpec.isPending || useCases.length === 0}>
             {genSpec.isPending ? "Generating..." : "Generate"}
           </button>
@@ -186,9 +207,30 @@ export default function OperatorDetail() {
         </div>
       </div>
 
-      {/* Section A: API Connection */}
+      {/* Section: Agent Identity + API Connection */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
-        <h3 className="font-semibold text-text-primary mb-3">API Connection</h3>
+        {/* Name & Description (editable) */}
+        <div className="mb-4 pb-4 border-b border-gray-100">
+          <input
+            className="w-full text-xl font-bold text-text-primary bg-transparent border-b border-transparent hover:border-gray-300 focus:border-tedee-cyan outline-none mb-1"
+            value={editName}
+            onChange={(e) => setEditName(e.target.value)}
+            onBlur={handleSaveNameDesc}
+            onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
+            placeholder="Agent name"
+          />
+          <input
+            className="w-full text-sm text-gray-500 bg-transparent border-b border-transparent hover:border-gray-300 focus:border-tedee-cyan outline-none"
+            value={editDesc}
+            onChange={(e) => setEditDesc(e.target.value)}
+            onBlur={handleSaveNameDesc}
+            onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
+            placeholder="Description"
+          />
+        </div>
+
+        {/* API Connection */}
+        <h3 className="font-semibold text-text-primary text-sm mb-3">API Connection</h3>
         {(() => {
           const isMcp = agent.api_type === "mcp";
           return (<>
@@ -196,13 +238,33 @@ export default function OperatorDetail() {
               <div><span className="text-gray-500">Type:</span> <span className="text-text-primary">{isMcp ? "MCP Server" : agent.api_type}</span></div>
               <div><span className="text-gray-500">{isMcp ? "Server URI:" : "Base URL:"}</span> <span className="text-text-primary">{agent.api_base_url || "Not set"}</span></div>
               <div><span className="text-gray-500">Auth:</span> <span className="text-text-primary">{agent.api_auth_type}</span></div>
-              <div><span className="text-gray-500">{isMcp ? "Auth Token:" : "API Key:"}</span> <span className="text-text-primary">{agent.has_api_key ? "Set" : "Not set"}</span></div>
+              <div>
+                <span className="text-gray-500">{isMcp ? "Auth Token:" : "API Key:"}</span>{" "}
+                {agent.has_api_key ? (
+                  <span className="font-mono text-text-primary text-xs">{agent.api_key_preview || "***"}</span>
+                ) : (
+                  <span className="text-gray-400">Not set</span>
+                )}
+              </div>
               <div className="col-span-2"><span className="text-gray-500">{isMcp ? "Tool Definitions:" : "API Spec:"}</span> <span className="text-text-primary">{agent.has_api_spec ? `Loaded (${agent.api_spec_endpoint_count} ${isMcp ? "tools" : "endpoints"})` : "Not uploaded"}</span></div>
             </div>
             <div className="space-y-3">
-              <div className="flex gap-2">
-                <input type="password" className={`${inp} flex-1`} placeholder={isMcp ? "Auth token" : "API Key"} value={apiKeyInput} onChange={(e) => setApiKeyInput(e.target.value)} />
-                <button className={btnGhost} onClick={async () => { if (apiKeyInput) { await setApiKey.mutateAsync({ id: id!, apiKey: apiKeyInput }); setApiKeyInput(""); } }}>{isMcp ? "Set Token" : "Set Key"}</button>
+              {/* API Key — inline edit */}
+              <div className="flex items-center gap-2">
+                {editingKey ? (
+                  <>
+                    <input type="password" className={`${inp} flex-1`} placeholder={isMcp ? "New auth token" : "New API key"} value={apiKeyInput} onChange={(e) => setApiKeyInput(e.target.value)} autoFocus />
+                    <button className={btnGhost} onClick={async () => {
+                      if (apiKeyInput) { await setApiKeyMut.mutateAsync({ id: id!, apiKey: apiKeyInput }); setApiKeyInput(""); }
+                      setEditingKey(false);
+                    }}>Save</button>
+                    <button className={btnGhost} onClick={() => { setEditingKey(false); setApiKeyInput(""); }}>Cancel</button>
+                  </>
+                ) : (
+                  <button className={btnGhost} onClick={() => setEditingKey(true)}>
+                    {agent.has_api_key ? "Change API Key" : "Set API Key"}
+                  </button>
+                )}
               </div>
               <div className="flex gap-2">
                 <textarea className={`${inp} flex-1`}
