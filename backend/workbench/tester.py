@@ -65,12 +65,30 @@ async def run_test(
             "total_latency_ms": int
         }
     """
+    # Auto-detect auth header (try multiple methods)
+    auth_headers_to_try = [{}]
+    if api_key:
+        auth_headers_to_try = [
+            {"Authorization": f"Bearer {api_key}"},
+            {"apikey": api_key},
+            {"X-Api-Key": api_key},
+            {"Api-Key": api_key},
+        ]
+        # If auth_config specifies a header name, prioritize it
+        if auth_config and auth_config.get("header_name"):
+            auth_headers_to_try.insert(0, {auth_config["header_name"]: api_key})
+
+    # Find working auth by testing base URL
     headers = {}
-    if auth_type == "bearer" and api_key:
-        headers["Authorization"] = f"Bearer {api_key}"
-    elif auth_type == "api_key_header":
-        header_name = (auth_config or {}).get("header_name", "X-Api-Key")
-        headers[header_name] = api_key
+    async with httpx.AsyncClient(timeout=10.0) as http:
+        for candidate in auth_headers_to_try:
+            try:
+                resp = await http.get(base_url.rstrip("/"), headers=candidate)
+                if resp.status_code < 400:
+                    headers = candidate
+                    break
+            except Exception:
+                continue
 
     steps = []
     previous_responses = []
@@ -86,18 +104,23 @@ async def run_test(
             # Resolve parameters
             resolved = _resolve_params(params, user_input, previous_responses)
 
-            # Substitute path parameters
+            # Substitute path parameters, collect remaining as query params
             url = base_url.rstrip("/") + path
+            query_params = {}
             for k, v in resolved.items():
-                url = url.replace(f"{{{k}}}", str(v))
+                placeholder = f"{{{k}}}"
+                if placeholder in url:
+                    url = url.replace(placeholder, str(v))
+                else:
+                    query_params[k] = v
 
             # Execute
             t0 = time.time()
             try:
                 if method in ("POST", "PUT", "PATCH"):
-                    resp = await http.request(method, url, json=resolved, headers=headers)
+                    resp = await http.request(method, url, json=resolved, headers=headers, params=query_params if query_params else None)
                 else:
-                    resp = await http.request(method, url, headers=headers)
+                    resp = await http.request(method, url, headers=headers, params=query_params if query_params else None)
                 latency = int((time.time() - t0) * 1000)
                 total_latency += latency
 
