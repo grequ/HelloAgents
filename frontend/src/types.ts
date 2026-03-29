@@ -103,7 +103,6 @@ export interface UseCase {
   user_input: string;
   expected_output: string;
   frequency: string;
-  is_write: boolean;
   sample_conversation?: string;
   status: string;
   discovered_endpoints?: Endpoint[];
@@ -120,7 +119,6 @@ export interface UseCaseCreate {
   user_input?: string;
   expected_output?: string;
   frequency?: string;
-  is_write?: boolean;
   sample_conversation?: string;
 }
 
@@ -158,7 +156,6 @@ export interface AgentTool {
   input_schema?: Record<string, unknown>;
   endpoints: Endpoint[];
   use_case_ids: string[];
-  is_write: boolean;
   status: string;
   created_at?: string;
   updated_at?: string;

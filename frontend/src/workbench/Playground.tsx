@@ -68,7 +68,6 @@ export default function Playground() {
   const [ucInput, setUcInput] = useState("");
   const [ucOutput, setUcOutput] = useState("");
   const [ucFreq, setUcFreq] = useState("");
-  const [ucIsWrite, setUcIsWrite] = useState(false);
   const [ucSampleConv, setUcSampleConv] = useState("");
   const [ucDirty, setUcDirty] = useState(false);
   const [ucSaved, setUcSaved] = useState(false);
@@ -107,7 +106,6 @@ export default function Playground() {
       setUcInput(uc.user_input || "");
       setUcOutput(uc.expected_output || "");
       setUcFreq(uc.frequency || "");
-      setUcIsWrite(uc.is_write || false);
       setUcSampleConv(uc.sample_conversation || "");
       setUcDirty(false);
       setTestInputStr(guessTestInput(uc.user_input));
@@ -137,7 +135,6 @@ export default function Playground() {
         if (suggestion.user_input) { setUcInput(suggestion.user_input); }
         if (suggestion.expected_output) { setUcOutput(suggestion.expected_output); }
         if (suggestion.frequency) { setUcFreq(suggestion.frequency); }
-        if (suggestion.is_write !== undefined) { setUcIsWrite(suggestion.is_write); }
         if (suggestion.sample_conversation) {
           const conv = suggestion.sample_conversation;
           setUcSampleConv(Array.isArray(conv) ? conv.join("\n") : conv);
@@ -156,7 +153,7 @@ export default function Playground() {
   const buildData = (): UseCaseCreate => ({
     name: ucName, description: ucDesc, trigger_text: ucTrigger,
     user_input: ucInput, expected_output: ucOutput, frequency: ucFreq,
-    is_write: ucIsWrite, sample_conversation: ucSampleConv,
+    sample_conversation: ucSampleConv,
   });
 
   const handleSaveUseCase = async () => {
@@ -379,17 +376,9 @@ export default function Playground() {
               <label className="block text-xs text-gray-500 mb-1">Expected Output</label>
               <AutoTextarea className={inp} value={ucOutput} onChange={setField(setUcOutput)} placeholder="What should the response contain?" />
             </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-xs text-gray-500 mb-1">Frequency</label>
-                <input className={inp} value={ucFreq} onChange={(e) => setField(setUcFreq)(e.target.value)} placeholder="~200/day" />
-              </div>
-              <div className="flex items-end pb-2">
-                <label className="flex items-center gap-1.5 text-xs text-gray-600">
-                  <input type="checkbox" checked={ucIsWrite} onChange={(e) => setField(setUcIsWrite)(e.target.checked)} />
-                  Write operation
-                </label>
-              </div>
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">Frequency</label>
+              <input className={inp} value={ucFreq} onChange={(e) => setField(setUcFreq)(e.target.value)} placeholder="~200/day" />
             </div>
             <div>
               <label className="block text-xs text-gray-500 mb-1">Sample Conversation</label>

@@ -147,6 +147,28 @@ async def ensure_schema():
             if row[0] > 0:
                 await cur.execute("ALTER TABLE wb_use_cases DROP COLUMN priority")
 
+            # Drop is_write column from wb_use_cases if it exists
+            await cur.execute("""
+                SELECT COUNT(*) FROM information_schema.COLUMNS
+                WHERE TABLE_SCHEMA = DATABASE()
+                  AND TABLE_NAME = 'wb_use_cases'
+                  AND COLUMN_NAME = 'is_write'
+            """)
+            row = await cur.fetchone()
+            if row[0] > 0:
+                await cur.execute("ALTER TABLE wb_use_cases DROP COLUMN is_write")
+
+            # Drop is_write column from wb_agent_tools if it exists
+            await cur.execute("""
+                SELECT COUNT(*) FROM information_schema.COLUMNS
+                WHERE TABLE_SCHEMA = DATABASE()
+                  AND TABLE_NAME = 'wb_agent_tools'
+                  AND COLUMN_NAME = 'is_write'
+            """)
+            row = await cur.fetchone()
+            if row[0] > 0:
+                await cur.execute("ALTER TABLE wb_agent_tools DROP COLUMN is_write")
+
             # Add api_spec_source column if missing
             await cur.execute("""
                 SELECT COUNT(*) FROM information_schema.COLUMNS
@@ -189,7 +211,7 @@ async def ensure_schema():
                 CREATE TABLE IF NOT EXISTS wb_agent_tools (
                     id CHAR(36) PRIMARY KEY, agent_id CHAR(36) NOT NULL,
                     name VARCHAR(200) NOT NULL, description TEXT, input_schema JSON,
-                    endpoints JSON, use_case_ids JSON, is_write BOOLEAN DEFAULT FALSE,
+                    endpoints JSON, use_case_ids JSON,
                     status VARCHAR(20) DEFAULT 'draft',
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -391,12 +413,12 @@ async def create_tool(data: dict) -> dict:
     tool_id = _new_id()
     pool = await get_pool()
     cols = ["id", "agent_id", "name", "description", "input_schema",
-            "endpoints", "use_case_ids", "is_write", "status"]
+            "endpoints", "use_case_ids", "status"]
     vals = [tool_id, data["agent_id"], data["name"], data.get("description", ""),
             json.dumps(data.get("input_schema")) if data.get("input_schema") else None,
             json.dumps(data.get("endpoints", [])),
             json.dumps(data.get("use_case_ids", [])),
-            data.get("is_write", False), data.get("status", "draft")]
+            data.get("status", "draft")]
     placeholders = ", ".join(["%s"] * len(cols))
     col_names = ", ".join(cols)
     async with pool.acquire() as conn:
@@ -438,13 +460,13 @@ async def replace_tools(agent_id: str, tools: list[dict]):
             for t in tools:
                 tool_id = _new_id()
                 await cur.execute(
-                    """INSERT INTO wb_agent_tools (id, agent_id, name, description, input_schema, endpoints, use_case_ids, is_write, status)
-                       VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)""",
+                    """INSERT INTO wb_agent_tools (id, agent_id, name, description, input_schema, endpoints, use_case_ids, status)
+                       VALUES (%s, %s, %s, %s, %s, %s, %s, %s)""",
                     (tool_id, agent_id, t.get("name", ""), t.get("description", ""),
                      json.dumps(t.get("input_schema")) if t.get("input_schema") else None,
                      json.dumps(t.get("endpoints", [])),
                      json.dumps(t.get("use_case_ids", [])),
-                     t.get("is_write", False), t.get("status", "draft")))
+                     t.get("status", "draft")))
 
 
 # ---- Use Cases ----
@@ -474,11 +496,11 @@ async def create_use_case(agent_id: str, data: dict) -> dict:
     uc_id = _new_id()
     pool = await get_pool()
     cols = ["id", "agent_id", "name", "description", "trigger_text", "user_input",
-            "expected_output", "frequency", "is_write", "sample_conversation"]
+            "expected_output", "frequency", "sample_conversation"]
     vals = [uc_id, agent_id, data["name"], data.get("description", ""),
             data.get("trigger_text", ""), data.get("user_input", ""),
             data.get("expected_output", ""), data.get("frequency", ""),
-            data.get("is_write", False), data.get("sample_conversation", "")]
+            data.get("sample_conversation", "")]
     placeholders = ", ".join(["%s"] * len(cols))
     col_names = ", ".join(cols)
     async with pool.acquire() as conn:

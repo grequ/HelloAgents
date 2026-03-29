@@ -88,7 +88,6 @@ class AgentToolOut(BaseModel):
     input_schema: dict | None = None
     endpoints: list | None = None
     use_case_ids: list | None = None
-    is_write: bool = False
     status: str = "draft"
     created_at: datetime | None = None
     updated_at: datetime | None = None
@@ -103,7 +102,6 @@ class UseCaseCreate(BaseModel):
     user_input: str = ""
     expected_output: str = ""
     frequency: str = ""
-    is_write: bool = False
     sample_conversation: str = ""
 
 
@@ -114,7 +112,6 @@ class UseCaseUpdate(BaseModel):
     user_input: str | None = None
     expected_output: str | None = None
     frequency: str | None = None
-    is_write: bool | None = None
     sample_conversation: str | None = None
 
 
@@ -127,7 +124,6 @@ class UseCaseOut(BaseModel):
     user_input: str | None
     expected_output: str | None
     frequency: str | None
-    is_write: bool
     sample_conversation: str | None
     discovered_endpoints: list | None = None
     discovered_behavior: str | None = None

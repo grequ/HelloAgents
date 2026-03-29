@@ -153,7 +153,6 @@ export interface AiSuggestion {
   user_input?: string;
   expected_output?: string;
   frequency?: string;
-  is_write?: boolean;
   sample_conversation?: string;
   error?: string;
 }
@@ -187,7 +186,6 @@ export interface DiscoveredEndpoint {
   method: string;
   path: string;
   summary: string;
-  is_write?: boolean;
 }
 
 export async function discoverEndpoints(spec: unknown, agentName: string): Promise<DiscoveredEndpoint[]> {

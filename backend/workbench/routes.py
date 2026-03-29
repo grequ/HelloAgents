@@ -319,10 +319,9 @@ async def discover_endpoints(body: dict):
         f"Analyze these API endpoints for the '{agent_name}' agent and return enriched descriptions.\n\n"
         f"Raw endpoints:\n{spec_text}\n\n"
         "Return a JSON array. For each endpoint:\n"
-        '{"method": "GET", "path": "/products", "summary": "one-line description of what this does and when to use it", "is_write": false}\n\n'
+        '{"method": "GET", "path": "/products", "summary": "one-line description of what this does and when to use it"}\n\n'
         "Rules:\n"
         "- summary should be clear, human-readable, 1 sentence\n"
-        "- is_write = true for POST/PUT/PATCH/DELETE that modify data, false for read-only\n"
         "- Group/order logically (CRUD order per resource)\n"
         "- Remove internal/admin endpoints that agents shouldn't use\n\n"
         "Return ONLY a JSON array, no markdown."
@@ -395,7 +394,6 @@ async def discover_tools(agent_id: str):
             "trigger": uc.get("trigger_text", ""),
             "user_input": uc.get("user_input", ""),
             "expected_output": uc.get("expected_output", ""),
-            "is_write": uc.get("is_write", False),
             "discovered_endpoints": uc.get("discovered_endpoints", []),
             "discovered_behavior": uc.get("discovered_behavior", ""),
         }
@@ -428,7 +426,7 @@ async def discover_tools(agent_id: str):
         "- Each tool should map to one or more use cases\n"
         "- Tool names must be snake_case\n"
         "- Related use cases can be combined into one tool if they share endpoints\n"
-        "- Each tool needs: name, description, input_schema (JSON Schema), endpoints (from discovered_endpoints), use_case_ids, is_write\n"
+        "- Each tool needs: name, description, input_schema (JSON Schema), endpoints (from discovered_endpoints), use_case_ids\n"
         "- The input_schema should define the parameters the tool accepts\n\n"
         "Return a JSON array of tool objects. Each object:\n"
         '{\n'
@@ -436,8 +434,7 @@ async def discover_tools(agent_id: str):
         '  "description": "Search products by keyword or category",\n'
         '  "input_schema": {"type": "object", "properties": {"query": {"type": "string", "description": "Search keyword"}}, "required": ["query"]},\n'
         '  "endpoints": [{"method": "GET", "path": "/products/search", "purpose": "..."}],\n'
-        '  "use_case_ids": ["uuid1", "uuid2"],\n'
-        '  "is_write": false\n'
+        '  "use_case_ids": ["uuid1", "uuid2"]\n'
         '}\n\n'
         "Return ONLY a JSON array, no markdown fences."
     )
@@ -475,7 +472,6 @@ async def discover_tools(agent_id: str):
             "input_schema": t.get("input_schema"),
             "endpoints": t.get("endpoints", []),
             "use_case_ids": t.get("use_case_ids", []),
-            "is_write": t.get("is_write", False),
             "status": "draft",
         })
 
@@ -585,7 +581,6 @@ async def suggest_use_case(body: dict):
         '- "user_input": What information does the user/caller provide? (specific parameter names)\n'
         '- "expected_output": What should the response contain? (specific data fields)\n'
         '- "frequency": Estimated frequency (e.g. "~100/day", "~10/week")\n'
-        '- "is_write": boolean — does this modify data?\n'
         '- "sample_conversation": A realistic 3-4 turn example dialogue between a user and the agent, formatted as:\n'
         "  User: ...\n  Agent: ...\n  User: ...\n  Agent: ...\n\n"
         "Return ONLY the JSON object, no markdown fences."

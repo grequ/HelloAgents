@@ -96,7 +96,6 @@ async def _generate_operator(agent_name: str, agents: list[dict],
             "trigger": uc.get("trigger_text", ""),
             "user_input": uc.get("user_input", ""),
             "expected_output": uc.get("expected_output", ""),
-            "is_write": uc.get("is_write", False),
             "frequency": uc.get("frequency", ""),
         }
         if uc.get("sample_conversation"):
@@ -344,7 +343,6 @@ async def _generate_orchestrator(agent_name: str, agents: list[dict],
             "trigger": uc.get("trigger_text", ""),
             "user_input": uc.get("user_input", ""),
             "expected_output": uc.get("expected_output", ""),
-            "is_write": uc.get("is_write", False),
             "frequency": uc.get("frequency", ""),
         }
         if uc.get("sample_conversation"):

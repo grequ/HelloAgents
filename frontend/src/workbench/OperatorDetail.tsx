@@ -32,7 +32,6 @@ function ToolCard({ tool, edit, onChange, onDelete, useCaseNames }: {
           onChange={(e) => onChange({ ...edit, name: e.target.value })}
         />
         <div className="flex items-center gap-2 shrink-0">
-          {tool.is_write && <span className="text-[10px] px-1.5 py-0.5 rounded bg-orange-100 text-orange-700 font-medium">WRITE</span>}
           <button onClick={toggleStatus} className={`text-[10px] px-1.5 py-0.5 rounded font-medium cursor-pointer ${tool.status === "completed" ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}>
             {tool.status}
           </button>
@@ -403,15 +402,12 @@ export default function OperatorDetail() {
             <div key={uc.id} className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
               <div className="flex items-center justify-between mb-1">
                 <Link to={`/workbench/agents/${id}/usecases/${uc.id}`} className="font-medium text-sm text-tedee-navy hover:underline">{uc.name}</Link>
-                <div className="flex gap-1.5">
-                  {uc.is_write && <span className="text-[10px] px-1.5 py-0.5 rounded bg-orange-100 text-orange-700 font-medium">WRITE</span>}
-                  <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${
-                    uc.status === "completed" ? "bg-emerald-100 text-emerald-700" :
-                    uc.status === "tested" ? "bg-blue-100 text-blue-700" :
-                    uc.status === "discovered" ? "bg-blue-100 text-blue-700" :
-                    "bg-amber-100 text-amber-700"
-                  }`}>{uc.status}</span>
-                </div>
+                <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${
+                  uc.status === "completed" ? "bg-emerald-100 text-emerald-700" :
+                  uc.status === "tested" ? "bg-blue-100 text-blue-700" :
+                  uc.status === "discovered" ? "bg-blue-100 text-blue-700" :
+                  "bg-amber-100 text-amber-700"
+                }`}>{uc.status}</span>
               </div>
               <p className="text-xs text-gray-500 mb-2">{uc.trigger_text || uc.description}</p>
               <div className="flex gap-2">

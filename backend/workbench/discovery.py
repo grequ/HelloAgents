@@ -41,7 +41,6 @@ compose the result.
 - **Trigger:** {use_case.get('trigger_text', '')}
 - **User provides:** {use_case.get('user_input', '')}
 - **Expected response:** {use_case.get('expected_output', '')}
-- **Write operation:** {use_case.get('is_write', False)}
 
 ## Instructions
 Return a JSON object with:

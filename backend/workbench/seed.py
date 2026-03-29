@@ -72,7 +72,7 @@ DEMO_AGENTS = [
                 "user_input": "Search keyword (e.g. 'laptop', 'phone', 'mascara')",
                 "expected_output": "List of matching products with name, price, rating, and availability",
                 "frequency": "~500/day",
-                "is_write": False,
+
             },
             {
                 "name": "Get product details",
@@ -81,7 +81,7 @@ DEMO_AGENTS = [
                 "user_input": "Product ID (e.g. 1, 5, 10)",
                 "expected_output": "Full product details: title, description, price, discount, rating, stock count, brand, category, images",
                 "frequency": "~300/day",
-                "is_write": False,
+
             },
             {
                 "name": "Check product availability",
@@ -90,7 +90,7 @@ DEMO_AGENTS = [
                 "user_input": "Product ID",
                 "expected_output": "Stock count and availability status (in stock / low stock / out of stock)",
                 "frequency": "~200/day",
-                "is_write": False,
+
             },
             {
                 "name": "Browse products by category",
@@ -99,7 +99,7 @@ DEMO_AGENTS = [
                 "user_input": "Category name (e.g. 'smartphones', 'laptops', 'groceries')",
                 "expected_output": "List of products in that category with prices and ratings",
                 "frequency": "~150/day",
-                "is_write": False,
+
             },
             {
                 "name": "Compare product prices",
@@ -108,7 +108,7 @@ DEMO_AGENTS = [
                 "user_input": "Search query or category, number of products to compare",
                 "expected_output": "Side-by-side comparison of products with prices, discounts, and ratings",
                 "frequency": "~80/day",
-                "is_write": False,
+
             },
         ],
     },
@@ -172,7 +172,7 @@ DEMO_AGENTS = [
                 "user_input": "Customer ID (e.g. 1, 5) or name",
                 "expected_output": "Full name, email, phone, address, company",
                 "frequency": "~400/day",
-                "is_write": False,
+
             },
             {
                 "name": "Find customer by name",
@@ -181,7 +181,7 @@ DEMO_AGENTS = [
                 "user_input": "Customer name (e.g. 'Emily', 'Johnson')",
                 "expected_output": "Matching customer profiles with IDs",
                 "frequency": "~200/day",
-                "is_write": False,
+
             },
             {
                 "name": "View customer order history",
@@ -190,7 +190,7 @@ DEMO_AGENTS = [
                 "user_input": "Customer ID",
                 "expected_output": "List of carts/orders with products, quantities, and totals",
                 "frequency": "~150/day",
-                "is_write": False,
+
             },
         ],
     },
@@ -246,7 +246,7 @@ DEMO_AGENTS = [
                 "user_input": "Cart/Order ID (e.g. 1, 5, 10)",
                 "expected_output": "List of items with product names, quantities, prices, and order total",
                 "frequency": "~300/day",
-                "is_write": False,
+
             },
             {
                 "name": "Check order total and discounts",
@@ -255,7 +255,7 @@ DEMO_AGENTS = [
                 "user_input": "Cart/Order ID",
                 "expected_output": "Total amount, discounted total, savings amount",
                 "frequency": "~150/day",
-                "is_write": False,
+
             },
             {
                 "name": "Find all orders for a customer",
@@ -264,7 +264,7 @@ DEMO_AGENTS = [
                 "user_input": "Customer/User ID",
                 "expected_output": "List of all orders with dates, totals, and item counts",
                 "frequency": "~100/day",
-                "is_write": False,
+
             },
             {
                 "name": "Identify items in an order for return",
@@ -273,7 +273,7 @@ DEMO_AGENTS = [
                 "user_input": "Cart/Order ID, item description",
                 "expected_output": "Matching item details with price, quantity, and whether it's returnable",
                 "frequency": "~50/day",
-                "is_write": False,
+
             },
         ],
     },
@@ -292,7 +292,7 @@ DEMO_AGENTS = [
                 "user_input": "Customer question about a product",
                 "expected_output": "Product details including name, price, availability, and description sourced from the product catalog operator",
                 "frequency": "~400/day",
-                "is_write": False,
+
             },
             {
                 "name": "Process return request",
@@ -301,7 +301,7 @@ DEMO_AGENTS = [
                 "user_input": "Customer ID or order ID, item to return",
                 "expected_output": "Order confirmation, item match, return eligibility status, and next steps",
                 "frequency": "~80/day",
-                "is_write": False,
+
             },
             {
                 "name": "Full order status check",
@@ -310,7 +310,7 @@ DEMO_AGENTS = [
                 "user_input": "Order ID or customer ID",
                 "expected_output": "Complete order status including items, totals, customer shipping address, and delivery context",
                 "frequency": "~250/day",
-                "is_write": False,
+
             },
         ],
     },
