@@ -79,15 +79,15 @@ function ToolCard({ tool, useCaseNames, onSaved }: { tool: AgentTool; useCaseNam
 
   return (
     <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
-      <div className="flex items-center justify-between mb-1">
+      <div className="flex items-center gap-2 mb-1">
         <input
-          className="font-mono text-sm font-semibold text-tedee-navy bg-transparent border-b border-transparent hover:border-gray-300 focus:border-tedee-cyan outline-none"
+          className="flex-1 min-w-0 font-mono text-sm font-semibold text-tedee-navy bg-transparent border-b border-transparent hover:border-gray-300 focus:border-tedee-cyan outline-none"
           value={name}
           onChange={(e) => { setName(e.target.value); setDirty(true); }}
           onBlur={handleSave}
           onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
         />
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 shrink-0">
           {dirty && <button onClick={handleSave} className="text-[10px] px-1.5 py-0.5 rounded bg-tedee-cyan/20 text-tedee-navy font-medium">{saved ? "Saved!" : "Save"}</button>}
           {tool.is_write && (
             <span className="text-[10px] px-1.5 py-0.5 rounded bg-orange-100 text-orange-700 font-medium">WRITE</span>
