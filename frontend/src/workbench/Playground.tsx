@@ -480,44 +480,110 @@ export default function Playground() {
 
               {/* Live Test */}
               <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
-                <h3 className="font-semibold text-text-primary text-sm mb-3">Live Test</h3>
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="font-semibold text-text-primary text-sm">Live Test</h3>
+                  {endpoints.length > 0 && (
+                    <button className={btnGhost} onClick={async () => {
+                      // AI generates test input from endpoints + use case
+                      try {
+                        const suggestion = await suggestUseCase(agentId!, `Test: ${ucName}`,
+                          `Generate a realistic test input JSON for this use case.\nEndpoints: ${endpoints.map(e => `${e.method} ${e.path}`).join(", ")}\nUser provides: ${ucInput}\nBehavior: ${behavior}`);
+                        if (suggestion.trigger_text) {
+                          // Build test input from the suggestion context
+                          const obj: Record<string, unknown> = {};
+                          for (const ep of endpoints) {
+                            const params = ep.parameters || {};
+                            for (const [k, v] of Object.entries(params)) {
+                              if (typeof v === "string" && v.toLowerCase().includes("user")) {
+                                obj[k] = k === "number" ? "14158586273" : k === "id" ? 1 : k === "q" ? "test" : "sample";
+                              }
+                            }
+                          }
+                          if (Object.keys(obj).length === 0) {
+                            // Fallback: parse from user_input description
+                            const input = ucInput.toLowerCase();
+                            if (input.includes("number")) obj.number = "14158586273";
+                            else if (input.includes("id")) obj.id = 1;
+                            else if (input.includes("query") || input.includes("search")) obj.q = "test";
+                            else obj.input = "test";
+                          }
+                          setTestInputStr(JSON.stringify(obj, null, 2));
+                        }
+                      } catch { /* ignore, keep existing input */ }
+                    }}>
+                      AI Suggest Input
+                    </button>
+                  )}
+                </div>
                 {!uc?.discovered_endpoints && endpoints.length === 0 ? (
                   <p className="text-xs text-gray-400">Run discovery first to map endpoints, then you can test.</p>
                 ) : (
                   <div className="space-y-3">
-                    <div>
-                      <label className="block text-xs text-gray-400 mb-1">Test Input (JSON)</label>
-                      <textarea className={`${inp} font-mono text-xs`} rows={4} value={testInputStr} onChange={(e) => setTestInputStr(e.target.value)} />
+                    {/* Endpoint chain preview */}
+                    <div className="bg-gray-50 rounded-lg p-3 border border-gray-200">
+                      <h4 className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Test will execute</h4>
+                      <div className="space-y-1">
+                        {endpoints.map((ep, i) => (
+                          <div key={i} className="flex items-center gap-2 text-xs">
+                            <span className="text-gray-400 w-4">{i + 1}.</span>
+                            <span className={`font-mono font-semibold px-1 py-0.5 rounded text-[10px] ${
+                              ep.method === "GET" ? "bg-green-100 text-green-700" :
+                              ep.method === "POST" ? "bg-blue-100 text-blue-700" :
+                              "bg-gray-100 text-gray-700"
+                            }`}>{ep.method}</span>
+                            <span className="font-mono text-text-primary">{ep.path}</span>
+                            {ep.purpose && <span className="text-gray-400 truncate">— {ep.purpose}</span>}
+                          </div>
+                        ))}
+                      </div>
+                      {behavior && <p className="text-[11px] text-gray-400 mt-2 border-t border-gray-200 pt-2">{behavior}</p>}
                     </div>
+
+                    {/* Test input */}
+                    <div>
+                      <label className="block text-xs text-gray-500 mb-1">Test Input — based on "{ucInput || "user input"}"</label>
+                      <textarea className={`${inp} font-mono text-xs`} rows={3} value={testInputStr} onChange={(e) => setTestInputStr(e.target.value)}
+                        placeholder='{"number": "14158586273"}' />
+                    </div>
+
                     <button className={btnPrimary} onClick={handleTest} disabled={runTestMut.isPending}>
                       {runTestMut.isPending ? "Running test..." : "Run Test"}
                     </button>
 
                     {testResult && (
-                      <div className="space-y-2 mt-3">
-                        <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Test Steps</h4>
+                      <div className="space-y-3 mt-2">
+                        {/* Steps */}
+                        <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Results</h4>
                         {testSteps.map((step, i) => (
-                          <div key={i} className={`rounded-lg p-3 border-l-4 ${step.success ? "border-green-500 bg-green-50" : "border-red-500 bg-red-50"}`}>
-                            <div className="flex items-center justify-between text-xs mb-1">
-                              <code className="font-mono font-medium">{String(step.endpoint)}</code>
-                              <span className={step.success ? "text-green-600" : "text-red-600"}>
-                                {String(step.status_code)} ({String(step.latency_ms)}ms)
+                          <div key={i} className={`rounded-lg border-l-4 ${step.success ? "border-green-500 bg-green-50" : "border-red-500 bg-red-50"}`}>
+                            <div className="flex items-center justify-between text-xs px-3 pt-2.5 pb-1">
+                              <div className="flex items-center gap-2">
+                                <span className="text-gray-400">{i + 1}.</span>
+                                <code className="font-mono font-medium">{String(step.endpoint)}</code>
+                              </div>
+                              <span className={`font-medium ${step.success ? "text-green-600" : "text-red-600"}`}>
+                                {String(step.status_code)} <span className="font-normal text-gray-400">({String(step.latency_ms)}ms)</span>
                               </span>
                             </div>
-                            <pre className="text-[10px] font-mono bg-white/60 rounded p-2 max-h-32 overflow-auto whitespace-pre-wrap break-all">
-                              {JSON.stringify(step.response, null, 2)}
-                            </pre>
+                            <pre className="text-[10px] font-mono px-3 pb-2.5 max-h-28 overflow-auto whitespace-pre-wrap break-all text-gray-600">
+{JSON.stringify(step.response, null, 2)}</pre>
                           </div>
                         ))}
+
+                        {/* Agent response */}
                         {!!testResult.agent_response && (
                           <div>
                             <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Agent Would Answer</h4>
-                            <div className="bg-tedee-cyan/10 rounded-lg p-3 text-sm text-text-primary leading-relaxed">
+                            <div className="bg-tedee-cyan/10 rounded-lg p-3 text-sm text-text-primary leading-relaxed whitespace-pre-wrap">
                               {String(testResult.agent_response)}
                             </div>
                           </div>
                         )}
-                        <p className="text-xs text-gray-400">Total latency: {String(testResult.total_latency_ms)}ms</p>
+
+                        <div className="flex items-center justify-between text-xs text-gray-400 pt-1 border-t border-gray-100">
+                          <span>Total: {String(testResult.total_latency_ms)}ms across {testSteps.length} call{testSteps.length !== 1 ? "s" : ""}</span>
+                          <span>{testSteps.filter(s => s.success).length}/{testSteps.length} succeeded</span>
+                        </div>
                       </div>
                     )}
                   </div>
