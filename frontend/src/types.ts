@@ -20,6 +20,7 @@ export interface Agent {
   api_endpoints?: { method: string; path: string; summary: string }[];
   status: string;
   use_case_count?: number;
+  tool_count?: number;
   created_at?: string;
   updated_at?: string;
 }
@@ -146,6 +147,20 @@ export interface AgentSpec {
   depends_on?: string[];
   called_by?: string[];
   generated_at?: string;
+}
+
+export interface AgentTool {
+  id: string;
+  agent_id: string;
+  name: string;
+  description: string;
+  input_schema?: Record<string, unknown>;
+  endpoints: Endpoint[];
+  use_case_ids: string[];
+  is_write: boolean;
+  status: string;
+  created_at?: string;
+  updated_at?: string;
 }
 
 export interface SpecConfig {

@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import * as api from "./api";
 import type {
   AgentCreate,
+  AgentTool,
   UseCaseCreate,
   SpecConfig,
   AgentSpec,
@@ -20,6 +21,7 @@ export const keys = {
   useCases: (agentId: string) => ["useCases", agentId] as const,
   useCase: (id: string) => ["useCase", id] as const,
   interactions: (agentId: string) => ["interactions", agentId] as const,
+  tools: (agentId: string) => ["tools", agentId] as const,
   specs: ["specs"] as const,
   spec: (id: string) => ["spec", id] as const,
 };
@@ -73,6 +75,14 @@ export function useInteractions(agentId: string) {
   return useQuery({
     queryKey: keys.interactions(agentId),
     queryFn: () => api.getInteractions(agentId),
+    enabled: !!agentId,
+  });
+}
+
+export function useTools(agentId: string) {
+  return useQuery({
+    queryKey: keys.tools(agentId),
+    queryFn: () => api.listTools(agentId),
     enabled: !!agentId,
   });
 }
@@ -200,6 +210,48 @@ export function useDeleteUseCase() {
     mutationFn: (id: string) => api.deleteUseCase(id),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: keys.dashboard });
+    },
+  });
+}
+
+export function useCompleteUseCase() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => api.completeUseCase(id),
+    onSuccess: (_data, id) => {
+      qc.invalidateQueries({ queryKey: keys.useCase(id) });
+      qc.invalidateQueries({ queryKey: keys.dashboard });
+    },
+  });
+}
+
+export function useUpdateTool() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, data }: { id: string; data: Partial<AgentTool> }) =>
+      api.updateTool(id, data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["tools"] });
+    },
+  });
+}
+
+export function useDeleteTool() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => api.deleteTool(id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["tools"] });
+    },
+  });
+}
+
+export function useDiscoverTools() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (agentId: string) => api.discoverTools(agentId),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["tools"] });
     },
   });
 }

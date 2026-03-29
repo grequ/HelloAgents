@@ -1,11 +1,12 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
-import type { UseCase, AgentConfig, SpecConfig } from "../types";
+import type { UseCase, AgentConfig, AgentTool, SpecConfig } from "../types";
 import {
   useAgent, useUseCases,
   useDeleteUseCase, useDeleteAgent,
   useSetApiKey, useUploadSpec, useTestConnection, useGenerateSpec,
   useSaveAgentConfig,
+  useTools, useUpdateTool, useDeleteTool, useDiscoverTools,
 } from "./queries";
 import { fetchUrl } from "./api";
 import { btnPrimary, btnSecondary, btnDanger, btnGhost, btnGhostDanger, btnGhostCyan, inp } from "./ui";
@@ -53,6 +54,77 @@ function generateAdditionalContext(agent: { name: string; api_type: string; api_
   return lines.join("\n");
 }
 
+// --- Tool Card ---
+
+function ToolCard({ tool }: { tool: AgentTool }) {
+  const [name, setName] = useState(tool.name);
+  const [desc, setDesc] = useState(tool.description);
+  const updateTool = useUpdateTool();
+  const deleteTool = useDeleteTool();
+
+  useEffect(() => { setName(tool.name); }, [tool.name]);
+  useEffect(() => { setDesc(tool.description); }, [tool.description]);
+
+  const saveName = () => { if (name !== tool.name) updateTool.mutate({ id: tool.id, data: { name } }); };
+  const saveDesc = () => { if (desc !== tool.description) updateTool.mutate({ id: tool.id, data: { description: desc } }); };
+  const toggleStatus = () => {
+    const next = tool.status === "ready" ? "draft" : "ready";
+    updateTool.mutate({ id: tool.id, data: { status: next } });
+  };
+
+  return (
+    <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+      <div className="flex items-center justify-between mb-1">
+        <input
+          className="font-mono text-sm font-semibold text-tedee-navy bg-transparent border-b border-transparent hover:border-gray-300 focus:border-tedee-cyan outline-none"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          onBlur={saveName}
+          onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
+        />
+        <div className="flex items-center gap-2">
+          {tool.is_write && (
+            <span className="text-[10px] px-1.5 py-0.5 rounded bg-orange-100 text-orange-700 font-medium">WRITE</span>
+          )}
+          <button
+            onClick={toggleStatus}
+            className={`text-[10px] px-1.5 py-0.5 rounded font-medium cursor-pointer ${
+              tool.status === "ready" ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-600"
+            }`}
+          >
+            {tool.status}
+          </button>
+          <button
+            onClick={() => { if (confirm("Delete this tool?")) deleteTool.mutate(tool.id); }}
+            className="inline-flex items-center justify-center rounded-md px-2 py-1 text-[10px] font-medium text-red-600 hover:bg-red-50"
+          >
+            Delete
+          </button>
+        </div>
+      </div>
+      <input
+        className="w-full text-xs text-gray-500 bg-transparent border-b border-transparent hover:border-gray-300 focus:border-tedee-cyan outline-none mb-2"
+        value={desc}
+        onChange={(e) => setDesc(e.target.value)}
+        onBlur={saveDesc}
+        onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
+      />
+      <div className="flex flex-wrap gap-1.5">
+        {tool.endpoints.map((ep, i) => (
+          <span key={i} className="text-[10px] font-mono bg-white px-1.5 py-0.5 rounded border border-gray-200 text-gray-600">
+            {ep.method} {ep.path}
+          </span>
+        ))}
+      </div>
+      {tool.use_case_ids && tool.use_case_ids.length > 0 && (
+        <p className="text-[10px] text-gray-400 mt-2">
+          Covers use cases: {tool.use_case_ids.join(", ")}
+        </p>
+      )}
+    </div>
+  );
+}
+
 // --- Component ---
 
 export default function OperatorDetail() {
@@ -60,6 +132,10 @@ export default function OperatorDetail() {
   const nav = useNavigate();
   const { data: agent, isLoading: agentLoading } = useAgent(id!);
   const { data: useCases = [], isLoading: ucLoading } = useUseCases(id!);
+  const { data: tools = [] } = useTools(id!);
+  const discoverToolsMut = useDiscoverTools();
+  const updateToolMut = useUpdateTool();
+  const deleteToolMut = useDeleteTool();
 
   const deleteUc = useDeleteUseCase();
   const deleteAg = useDeleteAgent();
@@ -308,49 +384,37 @@ export default function OperatorDetail() {
         </div>
       </div>
 
-      {/* Section C: MCP Tools (derived from discovered use cases) */}
+      {/* Section C: MCP Tools (persisted) */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
-        <h3 className="font-semibold text-text-primary mb-3">MCP Tools</h3>
-        <p className="text-xs text-gray-400 mb-3">
-          Each use case with discovered endpoints becomes an MCP tool. Run Discovery on use cases in the Playground to generate tools.
-        </p>
-        {(() => {
-          const discoveredUcs = useCases.filter((uc) => uc.discovered_endpoints && uc.discovered_endpoints.length > 0);
-          if (discoveredUcs.length === 0) {
-            return <p className="text-sm text-gray-500 text-center py-3">No tools yet. Add use cases and run Discovery to map them to API endpoints.</p>;
-          }
-          return (
-            <div className="space-y-2">
-              {discoveredUcs.map((uc) => {
-                // Tool name from discovered behavior or use case name
-                const toolName = uc.name.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "");
-                return (
-                  <div key={uc.id} className="bg-gray-50 rounded-lg p-3 border border-gray-200">
-                    <div className="flex items-center justify-between mb-1">
-                      <code className="text-sm font-mono font-semibold text-tedee-navy">{toolName}</code>
-                      <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${uc.status === "tested" ? "bg-green-100 text-green-700" : "bg-blue-100 text-blue-700"}`}>
-                        {uc.status === "tested" ? "tested" : "discovered"}
-                      </span>
-                    </div>
-                    <p className="text-xs text-gray-500 mb-2">{uc.description || uc.trigger_text}</p>
-                    <div className="flex flex-wrap gap-1.5">
-                      {(uc.discovered_endpoints || []).map((ep, i) => (
-                        <span key={i} className="text-[10px] font-mono bg-white px-1.5 py-0.5 rounded border border-gray-200 text-gray-600">
-                          {ep.method} {ep.path}
-                        </span>
-                      ))}
-                    </div>
-                    {uc.is_write && <span className="inline-block mt-1.5 text-[10px] px-1.5 py-0.5 rounded bg-orange-100 text-orange-700 font-medium">WRITE</span>}
-                  </div>
-                );
-              })}
-              <p className="text-xs text-gray-400 mt-2">
-                {discoveredUcs.length} tool{discoveredUcs.length !== 1 ? "s" : ""} ready.
-                {useCases.length - discoveredUcs.length > 0 && ` ${useCases.length - discoveredUcs.length} use case${useCases.length - discoveredUcs.length !== 1 ? "s" : ""} still need discovery.`}
-              </p>
-            </div>
-          );
-        })()}
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="font-semibold text-text-primary">MCP Tools</h3>
+          <button
+            className={btnPrimary}
+            disabled={useCases.filter((uc) => uc.status === "completed").length === 0 || discoverToolsMut.isPending}
+            onClick={() => discoverToolsMut.mutate(id!)}
+          >
+            {discoverToolsMut.isPending ? "Discovering..." : tools.length > 0 ? "Re-discover" : "Discover Tools"}
+          </button>
+        </div>
+        {tools.length > 0 ? (
+          <div className="space-y-2">
+            {tools.map((tool) => (
+              <ToolCard key={tool.id} tool={tool} />
+            ))}
+            <p className="text-xs text-gray-400 mt-2">
+              {tools.length} tool{tools.length !== 1 ? "s" : ""} &bull;{" "}
+              {tools.filter((t) => t.status === "ready").length} ready &bull;{" "}
+              {tools.filter((t) => t.status === "draft").length} draft &bull;{" "}
+              {new Set(tools.flatMap((t) => t.use_case_ids)).size} use case{new Set(tools.flatMap((t) => t.use_case_ids)).size !== 1 ? "s" : ""} covered
+            </p>
+          </div>
+        ) : (
+          <p className="text-sm text-gray-500 text-center py-3">
+            {useCases.filter((uc) => uc.status === "completed").length > 0
+              ? "Click 'Discover Tools' to generate MCP tool definitions from your completed use cases."
+              : "Complete use cases first (draft \u2192 discovered \u2192 tested \u2192 completed), then discover tools."}
+          </p>
+        )}
       </div>
 
       {/* Section D: Generation Config (collapsible) */}

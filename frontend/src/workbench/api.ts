@@ -1,6 +1,7 @@
 import type {
   Agent,
   AgentCreate,
+  AgentTool,
   UseCase,
   UseCaseCreate,
   AgentSpec,
@@ -134,6 +135,10 @@ export async function deleteUseCase(id: string): Promise<void> {
   return request<void>("DELETE", `/usecases/${id}`);
 }
 
+export async function completeUseCase(id: string): Promise<UseCase> {
+  return request<UseCase>("POST", `/usecases/${id}/complete`);
+}
+
 export async function saveDiscovery(
   useCaseId: string,
   data: { endpoints?: unknown; behavior?: string },
@@ -162,6 +167,23 @@ export async function suggestUseCase(
     name,
     description,
   });
+}
+
+// Agent Tools
+export async function listTools(agentId: string): Promise<AgentTool[]> {
+  return request<AgentTool[]>("GET", `/agents/${agentId}/tools`);
+}
+
+export async function updateTool(toolId: string, data: Partial<AgentTool>): Promise<AgentTool> {
+  return request<AgentTool>("PUT", `/agents/tools/${toolId}`, data);
+}
+
+export async function deleteTool(toolId: string): Promise<void> {
+  return request<void>("DELETE", `/agents/tools/${toolId}`);
+}
+
+export async function discoverTools(agentId: string): Promise<AgentTool[]> {
+  return request<AgentTool[]>("POST", `/agents/${agentId}/discover-tools`);
 }
 
 // Discover & Test

@@ -7,6 +7,7 @@ from fastapi.responses import Response
 
 from workbench.models import (
     AgentCreate, AgentUpdate, AgentOut,
+    AgentToolOut,
     UseCaseCreate, UseCaseUpdate, UseCaseOut,
     DiscoverRequest, TestRequest,
     GenerateSpecRequest, AgentSpecOut,
@@ -186,6 +187,138 @@ async def fetch_url(body: dict):
         raise HTTPException(400, f"Failed to fetch URL: {e}")
 
 
+# ---- Agent Tools ----
+
+@router.get("/agents/{agent_id}/tools", response_model=list[AgentToolOut])
+async def list_tools(agent_id: str):
+    return await wb_db.list_tools(agent_id)
+
+@router.put("/agents/tools/{tool_id}", response_model=AgentToolOut)
+async def update_tool(tool_id: str, body: dict):
+    t = await wb_db.update_tool(tool_id, body)
+    if not t:
+        raise HTTPException(404, "Tool not found")
+    return t
+
+@router.delete("/agents/tools/{tool_id}")
+async def delete_tool(tool_id: str):
+    await wb_db.delete_tool(tool_id)
+    return {"ok": True}
+
+@router.post("/agents/{agent_id}/discover-tools")
+async def discover_tools(agent_id: str):
+    """AI discovers MCP tools from completed use cases."""
+    agent = await wb_db.get_agent(agent_id)
+    if not agent:
+        raise HTTPException(404, "Agent not found")
+
+    # Get completed use cases
+    all_ucs = await wb_db.list_use_cases(agent_id)
+    completed = [uc for uc in all_ucs if uc.get("status") == "completed"]
+    if not completed:
+        raise HTTPException(400, "No completed use cases. Mark use cases as completed first.")
+
+    import anthropic, os, re
+    client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
+
+    # Build context
+    uc_context = []
+    for uc in completed:
+        entry = {
+            "id": uc["id"],
+            "name": uc["name"],
+            "description": uc.get("description", ""),
+            "trigger": uc.get("trigger_text", ""),
+            "user_input": uc.get("user_input", ""),
+            "expected_output": uc.get("expected_output", ""),
+            "is_write": uc.get("is_write", False),
+            "discovered_endpoints": uc.get("discovered_endpoints", []),
+            "discovered_behavior": uc.get("discovered_behavior", ""),
+        }
+        if uc.get("sample_conversation"):
+            entry["sample_conversation"] = uc["sample_conversation"]
+        uc_context.append(entry)
+
+    # API spec summary
+    api_summary = ""
+    if agent.get("api_spec"):
+        spec = agent["api_spec"]
+        if isinstance(spec, dict) and "paths" in spec:
+            lines = []
+            for path, methods in spec["paths"].items():
+                for method, details in methods.items():
+                    if method in ("get","post","put","patch","delete"):
+                        lines.append(f"  {method.upper()} {path}: {details.get('summary','')[:60]}")
+            api_summary = "\n".join(lines)
+
+    prompt = (
+        "You are designing MCP (Model Context Protocol) tools for an AI agent operator.\n\n"
+        f"Agent: {agent.get('name', '')}\n"
+        f"Description: {agent.get('description', '')}\n"
+        f"API Type: {agent.get('api_type', 'rest')}\n"
+        f"Base URL: {agent.get('api_base_url', '')}\n"
+        + (f"\nAPI Endpoints:\n{api_summary}\n" if api_summary else "")
+        + f"\nCompleted Use Cases:\n{json.dumps(uc_context, indent=2, default=str)}\n\n"
+        "Based on these completed use cases, generate MCP tool definitions.\n\n"
+        "Rules:\n"
+        "- Each tool should map to one or more use cases\n"
+        "- Tool names must be snake_case\n"
+        "- Related use cases can be combined into one tool if they share endpoints\n"
+        "- Each tool needs: name, description, input_schema (JSON Schema), endpoints (from discovered_endpoints), use_case_ids, is_write\n"
+        "- The input_schema should define the parameters the tool accepts\n\n"
+        "Return a JSON array of tool objects. Each object:\n"
+        '{\n'
+        '  "name": "search_products",\n'
+        '  "description": "Search products by keyword or category",\n'
+        '  "input_schema": {"type": "object", "properties": {"query": {"type": "string", "description": "Search keyword"}}, "required": ["query"]},\n'
+        '  "endpoints": [{"method": "GET", "path": "/products/search", "purpose": "..."}],\n'
+        '  "use_case_ids": ["uuid1", "uuid2"],\n'
+        '  "is_write": false\n'
+        '}\n\n'
+        "Return ONLY a JSON array, no markdown fences."
+    )
+
+    response = client.messages.create(
+        model="claude-sonnet-4-20250514",
+        max_tokens=4000,
+        messages=[{"role": "user", "content": prompt}],
+    )
+
+    text = response.content[0].text.strip()
+    text = re.sub(r'^```json\s*', '', text)
+    text = re.sub(r'\s*```$', '', text)
+
+    try:
+        tools = json.loads(text)
+    except json.JSONDecodeError:
+        start = text.find("[")
+        end = text.rfind("]")
+        if start != -1 and end != -1:
+            tools = json.loads(text[start:end + 1])
+        else:
+            raise HTTPException(500, "Failed to parse AI response")
+
+    if not isinstance(tools, list):
+        raise HTTPException(500, "AI did not return a tools array")
+
+    # Save tools (replace existing)
+    tool_dicts = []
+    for t in tools:
+        tool_dicts.append({
+            "agent_id": agent_id,
+            "name": t.get("name", "unnamed_tool"),
+            "description": t.get("description", ""),
+            "input_schema": t.get("input_schema"),
+            "endpoints": t.get("endpoints", []),
+            "use_case_ids": t.get("use_case_ids", []),
+            "is_write": t.get("is_write", False),
+            "status": "draft",
+        })
+
+    await wb_db.replace_tools(agent_id, tool_dicts)
+    return await wb_db.list_tools(agent_id)
+
+
 # ---- Use Cases CRUD ----
 
 @router.get("/agents/{agent_id}/usecases", response_model=list[UseCaseOut])
@@ -218,6 +351,20 @@ async def update_use_case(uc_id: str, body: UseCaseUpdate):
 async def delete_use_case(uc_id: str):
     await wb_db.delete_use_case(uc_id)
     return {"ok": True}
+
+
+@router.post("/usecases/{uc_id}/complete", response_model=UseCaseOut)
+async def complete_use_case(uc_id: str):
+    """Mark a use case as completed."""
+    uc = await wb_db.get_use_case(uc_id)
+    if not uc:
+        raise HTTPException(404, "Use case not found")
+    if uc.get("status") != "tested":
+        raise HTTPException(400, "Use case must be in 'tested' status to mark complete")
+    updated = await wb_db.update_use_case(uc_id, {"status": "completed"})
+    if not updated:
+        raise HTTPException(500, "Failed to update use case")
+    return updated
 
 
 @router.post("/suggest-use-case")

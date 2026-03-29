@@ -54,6 +54,23 @@ class AgentOut(BaseModel):
     api_endpoints: list = []
     status: str
     use_case_count: int = 0
+    tool_count: int = 0
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+
+
+# --- Agent Tools ---
+
+class AgentToolOut(BaseModel):
+    id: str
+    agent_id: str
+    name: str
+    description: str | None
+    input_schema: dict | None = None
+    endpoints: list | None = None
+    use_case_ids: list | None = None
+    is_write: bool = False
+    status: str = "draft"
     created_at: datetime | None = None
     updated_at: datetime | None = None
 

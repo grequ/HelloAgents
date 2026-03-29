@@ -46,6 +46,13 @@ def _row_to_agent(row: dict) -> dict:
     return row
 
 
+def _row_to_tool(row: dict) -> dict:
+    row["input_schema"] = _parse_json_field(row.get("input_schema"))
+    row["endpoints"] = _parse_json_field(row.get("endpoints")) or []
+    row["use_case_ids"] = _parse_json_field(row.get("use_case_ids")) or []
+    return row
+
+
 def _row_to_use_case(row: dict) -> dict:
     row["discovered_endpoints"] = _parse_json_field(row.get("discovered_endpoints"))
     row["test_results"] = _parse_json_field(row.get("test_results"))
@@ -163,6 +170,19 @@ async def ensure_schema():
                 )
             """)
 
+            # Create agent tools table if missing
+            await cur.execute("""
+                CREATE TABLE IF NOT EXISTS wb_agent_tools (
+                    id CHAR(36) PRIMARY KEY, agent_id CHAR(36) NOT NULL,
+                    name VARCHAR(200) NOT NULL, description TEXT, input_schema JSON,
+                    endpoints JSON, use_case_ids JSON, is_write BOOLEAN DEFAULT FALSE,
+                    status VARCHAR(20) DEFAULT 'draft',
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                    FOREIGN KEY (agent_id) REFERENCES wb_agents(id) ON DELETE CASCADE
+                )
+            """)
+
 
 # ---- Agents ----
 
@@ -171,9 +191,10 @@ async def list_agents(role: str | None = None) -> list[dict]:
     async with pool.acquire() as conn:
         async with conn.cursor(dict_cursor()) as cur:
             query = """
-                SELECT s.*, COUNT(uc.id) as use_case_count
+                SELECT s.*, COUNT(DISTINCT uc.id) as use_case_count, COUNT(DISTINCT t.id) as tool_count
                 FROM wb_agents s
                 LEFT JOIN wb_use_cases uc ON uc.agent_id = s.id
+                LEFT JOIN wb_agent_tools t ON t.agent_id = s.id
             """
             params = []
             if role:
@@ -269,6 +290,89 @@ async def update_agent_status(agent_id: str, status: str):
     async with pool.acquire() as conn:
         async with conn.cursor() as cur:
             await cur.execute("UPDATE wb_agents SET status = %s WHERE id = %s", (status, agent_id))
+
+
+# ---- Agent Tools ----
+
+async def list_tools(agent_id: str) -> list[dict]:
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        async with conn.cursor(dict_cursor()) as cur:
+            await cur.execute("SELECT * FROM wb_agent_tools WHERE agent_id = %s ORDER BY name",
+                              (agent_id,))
+            rows = await cur.fetchall()
+    return [_row_to_tool(r) for r in rows]
+
+
+async def get_tool(tool_id: str) -> dict | None:
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        async with conn.cursor(dict_cursor()) as cur:
+            await cur.execute("SELECT * FROM wb_agent_tools WHERE id = %s", (tool_id,))
+            row = await cur.fetchone()
+    if row is None:
+        return None
+    return _row_to_tool(row)
+
+
+async def create_tool(data: dict) -> dict:
+    tool_id = _new_id()
+    pool = await get_pool()
+    cols = ["id", "agent_id", "name", "description", "input_schema",
+            "endpoints", "use_case_ids", "is_write", "status"]
+    vals = [tool_id, data["agent_id"], data["name"], data.get("description", ""),
+            json.dumps(data.get("input_schema")) if data.get("input_schema") else None,
+            json.dumps(data.get("endpoints", [])),
+            json.dumps(data.get("use_case_ids", [])),
+            data.get("is_write", False), data.get("status", "draft")]
+    placeholders = ", ".join(["%s"] * len(cols))
+    col_names = ", ".join(cols)
+    async with pool.acquire() as conn:
+        async with conn.cursor() as cur:
+            await cur.execute(f"INSERT INTO wb_agent_tools ({col_names}) VALUES ({placeholders})", vals)
+    return await get_tool(tool_id)
+
+
+async def update_tool(tool_id: str, data: dict) -> dict | None:
+    pool = await get_pool()
+    fields = {k: v for k, v in data.items() if v is not None}
+    # JSON-encode complex fields
+    for key in ("input_schema", "endpoints", "use_case_ids"):
+        if key in fields and isinstance(fields[key], (dict, list)):
+            fields[key] = json.dumps(fields[key])
+    if not fields:
+        return await get_tool(tool_id)
+    sets = ", ".join(f"{k} = %s" for k in fields)
+    vals = [*fields.values(), tool_id]
+    async with pool.acquire() as conn:
+        async with conn.cursor() as cur:
+            await cur.execute(f"UPDATE wb_agent_tools SET {sets} WHERE id = %s", vals)
+    return await get_tool(tool_id)
+
+
+async def delete_tool(tool_id: str):
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        async with conn.cursor() as cur:
+            await cur.execute("DELETE FROM wb_agent_tools WHERE id = %s", (tool_id,))
+
+
+async def replace_tools(agent_id: str, tools: list[dict]):
+    """Delete all tools for agent_id, then INSERT each new tool."""
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        async with conn.cursor() as cur:
+            await cur.execute("DELETE FROM wb_agent_tools WHERE agent_id = %s", (agent_id,))
+            for t in tools:
+                tool_id = _new_id()
+                await cur.execute(
+                    """INSERT INTO wb_agent_tools (id, agent_id, name, description, input_schema, endpoints, use_case_ids, is_write, status)
+                       VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)""",
+                    (tool_id, agent_id, t.get("name", ""), t.get("description", ""),
+                     json.dumps(t.get("input_schema")) if t.get("input_schema") else None,
+                     json.dumps(t.get("endpoints", [])),
+                     json.dumps(t.get("use_case_ids", [])),
+                     t.get("is_write", False), t.get("status", "draft")))
 
 
 # ---- Use Cases ----

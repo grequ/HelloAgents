@@ -65,3 +65,18 @@ CREATE TABLE IF NOT EXISTS wb_agent_interactions (
     FOREIGN KEY (from_agent_id) REFERENCES wb_agents(id) ON DELETE CASCADE,
     FOREIGN KEY (to_agent_id) REFERENCES wb_agents(id) ON DELETE CASCADE
 );
+
+CREATE TABLE IF NOT EXISTS wb_agent_tools (
+    id              CHAR(36) PRIMARY KEY,
+    agent_id        CHAR(36) NOT NULL,
+    name            VARCHAR(200) NOT NULL,
+    description     TEXT,
+    input_schema    JSON,
+    endpoints       JSON,
+    use_case_ids    JSON,
+    is_write        BOOLEAN DEFAULT FALSE,
+    status          VARCHAR(20) DEFAULT 'draft',
+    created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (agent_id) REFERENCES wb_agents(id) ON DELETE CASCADE
+);

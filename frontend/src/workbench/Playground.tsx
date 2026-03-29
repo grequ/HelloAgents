@@ -4,9 +4,15 @@ import type { Endpoint, UseCaseCreate } from "../types";
 import {
   useAgent, useUseCase, useUpdateUseCase, useCreateUseCase,
   useDiscover, useRunTest, useSaveDiscovery, useDeleteUseCase,
+  useCompleteUseCase,
 } from "./queries";
 import { suggestUseCase } from "./api";
 import { btnPrimary, btnSecondary, btnDanger, btnSuccess, btnGhost, btnGhostDanger, inp } from "./ui";
+
+const STAGES = ["draft", "discovered", "tested", "completed"] as const;
+const STAGE_LABELS = ["Definition", "Discovered", "Tested", "Completed"] as const;
+const STAGE_COLORS = ["bg-gray-400", "bg-blue-500", "bg-amber-500", "bg-emerald-500"] as const;
+const STAGE_RING_COLORS = ["ring-gray-400", "ring-blue-500", "ring-amber-500", "ring-emerald-500"] as const;
 
 function AutoTextarea({ value, onChange, placeholder, className }: {
   value: string; onChange: (v: string) => void; placeholder?: string; className?: string;
@@ -50,6 +56,7 @@ export default function Playground() {
   const createUcMut = useCreateUseCase();
   const updateUcMut = useUpdateUseCase();
   const deleteUcMut = useDeleteUseCase();
+  const completeUcMut = useCompleteUseCase();
   const discoverMut = useDiscover();
   const runTestMut = useRunTest();
   const saveDiscMut = useSaveDiscovery();
@@ -212,6 +219,16 @@ export default function Playground() {
   const testSteps = (testResult?.steps as Array<Record<string, unknown>>) || [];
   const status = isNew ? "new" : uc?.status || "draft";
   const canAiSuggest = ucName.trim().length > 0 && ucDesc.trim().length > 0;
+  const stageIdx = STAGES.indexOf(status as typeof STAGES[number]);
+
+  const handleMarkComplete = async () => {
+    try {
+      await completeUcMut.mutateAsync(ucId!);
+      refetchUc();
+    } catch (e: unknown) {
+      alert("Mark complete failed: " + (e instanceof Error ? e.message : "Unknown error"));
+    }
+  };
 
   return (
     <div className="max-w-7xl mx-auto">
@@ -226,12 +243,62 @@ export default function Playground() {
             {ucSaved ? "Saved!" : isNew ? (createUcMut.isPending ? "Creating..." : "Create & Save") : "Save"}
           </button>
           {!isNew && (
+            <button className={btnSuccess} onClick={handleMarkComplete}
+              disabled={status !== "tested" || completeUcMut.isPending}>
+              {completeUcMut.isPending ? "Completing..." : "Mark Complete"}
+            </button>
+          )}
+          {!isNew && (
             <button className={btnDanger} onClick={async () => { if (confirm("Delete this use case?")) { await deleteUcMut.mutateAsync(ucId!); nav(`/workbench/agents/${agentId}`); } }}>
               Delete
             </button>
           )}
         </div>
       </div>
+
+      {/* Status Stepper */}
+      {!isNew && (
+        <div className="mb-5">
+          <div className="flex items-center px-4">
+            {STAGES.map((stage, i) => {
+              const reached = stageIdx >= i;
+              const isCurrent = stageIdx === i;
+              return (
+                <div key={stage} className="flex items-center flex-1 last:flex-none">
+                  <div className="flex flex-col items-center">
+                    <div
+                      className={`rounded-full transition-all ${
+                        isCurrent
+                          ? `w-4 h-4 ${STAGE_COLORS[i]} ring-2 ${STAGE_RING_COLORS[i]} ring-offset-2`
+                          : reached
+                            ? `w-3 h-3 ${STAGE_COLORS[i]}`
+                            : "w-3 h-3 border-2 border-gray-300 bg-white"
+                      }`}
+                    />
+                    <span className={`text-[11px] mt-1.5 font-medium ${
+                      isCurrent ? "text-gray-900" : reached ? "text-gray-600" : "text-gray-400"
+                    }`}>
+                      {STAGE_LABELS[i]}
+                    </span>
+                  </div>
+                  {i < STAGES.length - 1 && (
+                    <div className={`flex-1 h-0.5 mx-2 mb-5 ${
+                      stageIdx > i ? STAGE_COLORS[i] : "bg-gray-200"
+                    }`} />
+                  )}
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Completed banner */}
+          {status === "completed" && (
+            <div className="mt-3 rounded-lg bg-emerald-50 border border-emerald-200 px-4 py-2.5 text-sm text-emerald-700 font-medium">
+              This use case is complete and ready for tool discovery.
+            </div>
+          )}
+        </div>
+      )}
 
       <div className="grid grid-cols-[1fr_1.3fr] gap-5">
         {/* Left — Use Case Definition (editable) */}
