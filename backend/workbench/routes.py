@@ -263,7 +263,7 @@ async def generate_test_input(body: dict):
     )
 
     response = client.messages.create(
-        model="claude-sonnet-4-20250514",
+        model="claude-haiku-4-5-20251001",  # Fast, simple task
         max_tokens=500,
         messages=[{"role": "user", "content": prompt}],
     )
@@ -444,7 +444,7 @@ async def discover_tools(agent_id: str):
     )
 
     response = client.messages.create(
-        model="claude-sonnet-4-20250514",
+        model="claude-opus-4-6",  # Architectural decision — needs best reasoning
         max_tokens=4000,
         messages=[{"role": "user", "content": prompt}],
     )

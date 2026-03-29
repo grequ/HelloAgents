@@ -552,7 +552,7 @@ def _extract_text(response_text: str) -> str:
 
 async def _call_claude(prompt: str) -> str:
     response = client.messages.create(
-        model="claude-sonnet-4-20250514",
+        model="claude-opus-4-6",
         max_tokens=8000,
         messages=[{"role": "user", "content": prompt}],
     )
@@ -561,7 +561,7 @@ async def _call_claude(prompt: str) -> str:
 
 async def _call_claude_json(prompt: str) -> list:
     response = client.messages.create(
-        model="claude-sonnet-4-20250514",
+        model="claude-opus-4-6",
         max_tokens=4000,
         messages=[{"role": "user", "content": prompt}],
     )

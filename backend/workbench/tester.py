@@ -188,7 +188,7 @@ API Results:
 Write a concise, helpful response using the data from the API results. If any call failed, mention that gracefully."""
 
     response = client.messages.create(
-        model="claude-sonnet-4-20250514",
+        model="claude-haiku-4-5-20251001",  # Fast, simple response composition
         max_tokens=500,
         messages=[{"role": "user", "content": prompt}],
     )
