@@ -7,6 +7,7 @@ import Playground from "./workbench/Playground";
 import AgentSpecList from "./workbench/AgentSpecList";
 import AgentSpecView from "./workbench/AgentSpecView";
 import AgentMap from "./workbench/AgentMap";
+import Settings from "./workbench/Settings";
 import DemoPage from "./DemoPage";
 import { useAgent } from "./workbench/queries";
 
@@ -32,6 +33,7 @@ export default function App() {
           <Route path="/workbench/specs" element={<AgentSpecList />} />
           <Route path="/workbench/specs/:id" element={<AgentSpecView />} />
           <Route path="/workbench/map" element={<AgentMap />} />
+          <Route path="/workbench/settings" element={<Settings />} />
           <Route path="/workbench/demo" element={<DemoPage />} />
         </Route>
         <Route path="/" element={<Navigate to="/workbench" replace />} />

@@ -11,6 +11,7 @@ import type {
   ConnectionResult,
   SpecConfig,
   Interactions,
+  OrgSettings,
 } from "../types";
 
 const BASE = "/workbench";
@@ -236,6 +237,15 @@ export async function updateSpec(id: string, data: Partial<AgentSpec>): Promise<
 
 export async function deleteSpec(id: string): Promise<void> {
   return request<void>("DELETE", `/specs/${id}`);
+}
+
+// Org Settings
+export async function getOrgSettings(): Promise<OrgSettings> {
+  return request<OrgSettings>("GET", "/settings");
+}
+
+export async function updateOrgSettings(data: Partial<OrgSettings>): Promise<OrgSettings> {
+  return request<OrgSettings>("PUT", "/settings", data);
 }
 
 // Seed demo data

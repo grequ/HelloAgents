@@ -80,3 +80,19 @@ CREATE TABLE IF NOT EXISTS wb_agent_tools (
     updated_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (agent_id) REFERENCES wb_agents(id) ON DELETE CASCADE
 );
+
+CREATE TABLE IF NOT EXISTS wb_org_settings (
+    id              CHAR(36) PRIMARY KEY,
+    tech_stack      VARCHAR(200) DEFAULT 'Python 3.12',
+    framework       VARCHAR(200) DEFAULT 'FastAPI + MCP SDK + anthropic SDK',
+    mcp_sdk_version VARCHAR(50) DEFAULT '1.x',
+    deployment      VARCHAR(200) DEFAULT 'Docker containers',
+    error_handling  TEXT,
+    retry_strategy  TEXT,
+    logging         TEXT,
+    auth_pattern    TEXT,
+    coding_standards TEXT,
+    communication   VARCHAR(200) DEFAULT 'MCP (Model Context Protocol)',
+    org_rules       TEXT,
+    updated_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);

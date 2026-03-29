@@ -11,6 +11,7 @@ from workbench.models import (
     UseCaseCreate, UseCaseUpdate, UseCaseOut,
     DiscoverRequest, TestRequest,
     GenerateSpecRequest, AgentSpecOut,
+    OrgSettingsOut,
 )
 from workbench import wb_db
 from workbench.crypto import encrypt_api_key, decrypt_api_key
@@ -34,6 +35,20 @@ async def dashboard():
 async def seed():
     from workbench.seed import seed_demo_data
     return await seed_demo_data()
+
+
+# ---- Organization Settings ----
+
+@router.get("/settings", response_model=OrgSettingsOut)
+async def get_settings():
+    s = await wb_db.get_org_settings()
+    if not s:
+        raise HTTPException(404, "Settings not found")
+    return s
+
+@router.put("/settings", response_model=OrgSettingsOut)
+async def update_settings(body: dict):
+    return await wb_db.update_org_settings(body)
 
 
 # ---- Agents CRUD ----
@@ -571,10 +586,13 @@ async def generate_spec(body: GenerateSpecRequest):
                         if op:
                             connected_operators.append(op)
 
+        org_settings = await wb_db.get_org_settings()
+
         result = await generate(
             body.agent_name, agents, use_cases,
             config=config_dict, role=role,
             connected_operators=connected_operators,
+            org_settings=org_settings,
         )
 
         spec = await wb_db.create_spec({

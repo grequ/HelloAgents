@@ -5,6 +5,24 @@ from typing import Optional
 from datetime import datetime
 
 
+# --- Organization Settings ---
+
+class OrgSettingsOut(BaseModel):
+    id: str
+    tech_stack: str = "Python 3.12"
+    framework: str = "FastAPI + MCP SDK + anthropic SDK"
+    mcp_sdk_version: str = "1.x"
+    deployment: str = "Docker containers"
+    error_handling: str | None = None
+    retry_strategy: str | None = None
+    logging: str | None = None
+    auth_pattern: str | None = None
+    coding_standards: str | None = None
+    communication: str = "MCP (Model Context Protocol)"
+    org_rules: str | None = None
+    updated_at: datetime | None = None
+
+
 # --- Agents ---
 
 class AgentCreate(BaseModel):

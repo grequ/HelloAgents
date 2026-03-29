@@ -1,58 +1,14 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
-import type { UseCase, AgentConfig, AgentTool, SpecConfig } from "../types";
+import type { UseCase, AgentTool } from "../types";
 import {
   useAgent, useUseCases,
   useDeleteUseCase, useDeleteAgent,
   useSetApiKey, useUploadSpec, useTestConnection, useGenerateSpec,
-  useSaveAgentConfig,
   useTools, useUpdateTool, useDeleteTool, useDiscoverTools,
 } from "./queries";
 import { fetchUrl } from "./api";
-import { btnPrimary, btnSecondary, btnDanger, btnGhost, btnGhostDanger, btnGhostCyan, inp } from "./ui";
-
-// --- Auto-sizing textarea ---
-
-function AutoTextarea({ value, onChange, placeholder, className }: {
-  value: string; onChange: (v: string) => void; placeholder?: string; className?: string;
-}) {
-  const ref = useRef<HTMLTextAreaElement>(null);
-  const resize = useCallback(() => {
-    const el = ref.current;
-    if (el) { el.style.height = "auto"; el.style.height = Math.max(60, el.scrollHeight) + "px"; }
-  }, []);
-  useEffect(() => { resize(); }, [value, resize]);
-  return (
-    <textarea ref={ref} className={className} value={value}
-      onChange={(e) => onChange(e.target.value)} onInput={resize}
-      placeholder={placeholder} rows={1} style={{ overflow: "hidden", resize: "none" }} />
-  );
-}
-
-// --- Generators ---
-
-function generateAdditionalContext(agent: { name: string; api_type: string; api_base_url: string; api_auth_type?: string; has_api_spec: boolean; api_spec_endpoint_count?: number; api_docs_url?: string }, ucs: UseCase[]): string {
-  const lines: string[] = [];
-  if (agent.api_base_url) lines.push(`API Base URL: ${agent.api_base_url}`);
-  if (agent.api_auth_type && agent.api_auth_type !== "none") lines.push(`Authentication: ${agent.api_auth_type}`);
-  if (agent.has_api_spec) lines.push(`OpenAPI spec loaded with ${agent.api_spec_endpoint_count ?? "unknown number of"} endpoints.`);
-  if (agent.api_docs_url) lines.push(`API docs: ${agent.api_docs_url}`);
-  const tested = ucs.filter((u) => u.status === "tested");
-  const discovered = ucs.filter((u) => u.status === "discovered" || u.status === "tested");
-  if (tested.length > 0) lines.push(`\n${tested.length} of ${ucs.length} use cases have been live-tested.`);
-  if (discovered.length > tested.length) lines.push(`${discovered.length - tested.length} additional use cases have discovered endpoints but are untested.`);
-  const writes = ucs.filter((u) => u.is_write);
-  if (writes.length > 0) lines.push(`\nWrite operations (${writes.map((u) => u.name).join(", ")}): require user confirmation.`);
-  const highFreq = ucs.filter((u) => u.frequency);
-  if (highFreq.length > 0) lines.push(`\nExpected traffic: ${highFreq.map((u) => `${u.name} (${u.frequency})`).join(", ")}.`);
-  const allEps = ucs.flatMap((u) => u.discovered_endpoints || []);
-  if (allEps.length > 0) {
-    const methods = [...new Set(allEps.map((e) => e.method))];
-    const paths = [...new Set(allEps.map((e) => e.path))];
-    lines.push(`\nDiscovered ${allEps.length} endpoint calls across ${paths.length} unique paths (methods: ${methods.join(", ")}).`);
-  }
-  return lines.join("\n");
-}
+import { btnPrimary, btnDanger, btnGhost, btnGhostDanger, btnGhostCyan, inp } from "./ui";
 
 // --- Tool Card ---
 
@@ -149,22 +105,10 @@ export default function OperatorDetail() {
   const uploadSpec = useUploadSpec();
   const testConn = useTestConnection();
   const genSpec = useGenerateSpec();
-  const saveConfig = useSaveAgentConfig();
 
   // Forms
   const [apiKeyInput, setApiKeyInput] = useState("");
   const [specInput, setSpecInput] = useState("");
-  const [saved, setSaved] = useState(false);
-  const [genConfigOpen, setGenConfigOpen] = useState(false);
-
-  // Config state
-  const [genConfig, setGenConfig] = useState({
-    agent_name: "", tech_stack: "Python 3.11", framework: "FastAPI + anthropic SDK",
-    deployment: "Standalone microservice (Docker)",
-    error_handling: "Retry once on 5xx, return graceful error message to user on failure",
-    auth_notes: "",
-  });
-  const [configLoaded, setConfigLoaded] = useState(false);
 
   // Load saved spec source into textarea
   const specSourceLoaded = useRef(false);
@@ -175,49 +119,6 @@ export default function OperatorDetail() {
       specSourceLoaded.current = true;
     }
   }, [agent]);
-
-  // Load config from DB or generate defaults
-  useEffect(() => {
-    if (!agent || configLoaded) return;
-    const c = agent.agent_config;
-    if (c) {
-      setGenConfig({
-        agent_name: c.agent_name || agent.name + " Operator",
-        tech_stack: c.tech_stack || "Python 3.11",
-        framework: c.framework || "FastAPI + anthropic SDK",
-        deployment: c.deployment || "Standalone microservice (Docker)",
-        error_handling: c.error_handling || "Retry once on 5xx, return graceful error message to user on failure",
-        auth_notes: c.auth_notes || "",
-      });
-      setConfigLoaded(true);
-    } else if (useCases.length > 0) {
-      setGenConfig((prev) => ({
-        ...prev,
-        agent_name: prev.agent_name || agent.name + " Operator",
-        auth_notes: prev.auth_notes || (agent.api_auth_type && agent.api_auth_type !== "none" ? `${agent.api_auth_type} — API key from env var` : ""),
-      }));
-      setConfigLoaded(true);
-    }
-  }, [agent, useCases, configLoaded]);
-
-  // --- Save ---
-
-  const handleSave = async () => {
-    try {
-      const config: AgentConfig = {
-        ...genConfig,
-        agent_persona: "",
-        additional_context: "",
-      };
-      await saveConfig.mutateAsync({ id: id!, config });
-      setSaved(true);
-      setTimeout(() => setSaved(false), 2000);
-    } catch (e: unknown) {
-      alert("Save failed: " + (e instanceof Error ? e.message : "unknown error"));
-    }
-  };
-
-  const isSaving = saveConfig.isPending;
 
   // --- Other handlers ---
 
@@ -251,25 +152,11 @@ export default function OperatorDetail() {
   };
 
   const handleGenerate = async () => {
-    // Save first
-    await handleSave();
-
-    const additionalContext = generateAdditionalContext(agent!, useCases);
-
-    const config: SpecConfig = {
-      tech_stack: genConfig.tech_stack,
-      framework: genConfig.framework,
-      agent_role: "operator",
-      deployment: genConfig.deployment,
-      error_handling: genConfig.error_handling,
-      auth_notes: genConfig.auth_notes,
-      additional_context: additionalContext,
-      interactions: "",
-    };
     try {
       const spec = await genSpec.mutateAsync({
-        agentName: genConfig.agent_name || agent!.name + " Operator",
-        agentIds: [id!], useCaseIds: useCases.map((u) => u.id), config,
+        agentName: agent!.name,
+        agentIds: [id!],
+        useCaseIds: useCases.map((u) => u.id),
       });
       nav(`/workbench/specs/${spec.id}`);
     } catch (e: unknown) {
@@ -290,9 +177,6 @@ export default function OperatorDetail() {
         </div>
         <div className="flex items-center gap-2">
           <span className="text-[11px] px-2 py-0.5 rounded-full bg-gray-200 text-gray-700 font-medium">{agent.status}</span>
-          <button className={btnSecondary} onClick={handleSave} disabled={isSaving}>
-            {saved ? "Saved!" : isSaving ? "Saving..." : "Save"}
-          </button>
           <button className={btnPrimary} onClick={handleGenerate} disabled={genSpec.isPending || useCases.length === 0}>
             {genSpec.isPending ? "Generating..." : "Generate"}
           </button>
@@ -432,52 +316,6 @@ export default function OperatorDetail() {
         })()}
       </div>
 
-      {/* Section D: Generation Config (collapsible) */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
-        <button
-          className="flex items-center justify-between w-full text-left"
-          onClick={() => setGenConfigOpen(!genConfigOpen)}
-        >
-          <h3 className="font-semibold text-text-primary">Generation Config</h3>
-          <span className="text-gray-400 text-sm">{genConfigOpen ? "Hide" : "Show"}</span>
-        </button>
-        {genConfigOpen && (
-          <div className="mt-4 space-y-3">
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-xs text-gray-500 mb-1">Agent Name</label>
-                <input className={inp} value={genConfig.agent_name} onChange={(e) => setGenConfig({ ...genConfig, agent_name: e.target.value })} />
-              </div>
-              <div>
-                <label className="block text-xs text-gray-500 mb-1">Technology Stack</label>
-                <select className={inp} value={genConfig.tech_stack} onChange={(e) => setGenConfig({ ...genConfig, tech_stack: e.target.value })}>
-                  <option>Python 3.11</option><option>Python 3.12</option><option>Node.js / TypeScript</option>
-                </select>
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-xs text-gray-500 mb-1">Framework</label>
-                <input className={inp} value={genConfig.framework} onChange={(e) => setGenConfig({ ...genConfig, framework: e.target.value })} />
-              </div>
-              <div>
-                <label className="block text-xs text-gray-500 mb-1">Deployment</label>
-                <input className={inp} value={genConfig.deployment} onChange={(e) => setGenConfig({ ...genConfig, deployment: e.target.value })} />
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-xs text-gray-500 mb-1">Error Handling</label>
-                <input className={inp} value={genConfig.error_handling} onChange={(e) => setGenConfig({ ...genConfig, error_handling: e.target.value })} />
-              </div>
-              <div>
-                <label className="block text-xs text-gray-500 mb-1">Authentication Notes</label>
-                <AutoTextarea className={inp} value={genConfig.auth_notes} onChange={(v) => setGenConfig({ ...genConfig, auth_notes: v })} placeholder="Auth details for code generation..." />
-              </div>
-            </div>
-          </div>
-        )}
-      </div>
     </div>
   );
 }

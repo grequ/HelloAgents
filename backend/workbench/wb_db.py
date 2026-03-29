@@ -183,6 +183,57 @@ async def ensure_schema():
                 )
             """)
 
+            # Create org settings table if missing
+            await cur.execute("""
+                CREATE TABLE IF NOT EXISTS wb_org_settings (
+                    id CHAR(36) PRIMARY KEY, tech_stack VARCHAR(200) DEFAULT 'Python 3.12',
+                    framework VARCHAR(200) DEFAULT 'FastAPI + MCP SDK + anthropic SDK',
+                    mcp_sdk_version VARCHAR(50) DEFAULT '1.x',
+                    deployment VARCHAR(200) DEFAULT 'Docker containers',
+                    error_handling TEXT, retry_strategy TEXT, logging TEXT, auth_pattern TEXT,
+                    coding_standards TEXT, communication VARCHAR(200) DEFAULT 'MCP (Model Context Protocol)',
+                    org_rules TEXT, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+                )
+            """)
+            # Insert default row if empty
+            await cur.execute("SELECT COUNT(*) FROM wb_org_settings")
+            row = await cur.fetchone()
+            if row[0] == 0:
+                await cur.execute("""INSERT INTO wb_org_settings (id, error_handling, retry_strategy, logging, auth_pattern, coding_standards, org_rules)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s)""",
+                    (_new_id(),
+                     'Retry once on 5xx with exponential backoff. Return graceful error message to caller on failure. Log all errors with context.',
+                     'Max 3 retries with 1s/2s/4s delays for transient failures. Circuit breaker after 5 consecutive failures.',
+                     'Structured JSON logging. Log tool calls, API requests, errors, and latency. No sensitive data in logs.',
+                     'API keys from environment variables. Bearer token auth. Never hardcode credentials.',
+                     'snake_case for functions/variables. PascalCase for classes. Type hints required. Docstrings on public functions.',
+                     ''))
+
+
+# ---- Organization Settings ----
+
+async def get_org_settings() -> dict | None:
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        async with conn.cursor(dict_cursor()) as cur:
+            await cur.execute("SELECT * FROM wb_org_settings LIMIT 1")
+            return await cur.fetchone()
+
+async def update_org_settings(data: dict) -> dict:
+    pool = await get_pool()
+    settings = await get_org_settings()
+    if not settings:
+        return {}
+    fields = {k: v for k, v in data.items() if v is not None and k != "id"}
+    if not fields:
+        return settings
+    sets = ", ".join(f"{k} = %s" for k in fields)
+    vals = [*fields.values(), settings["id"]]
+    async with pool.acquire() as conn:
+        async with conn.cursor() as cur:
+            await cur.execute(f"UPDATE wb_org_settings SET {sets} WHERE id = %s", vals)
+    return await get_org_settings()
+
 
 # ---- Agents ----
 

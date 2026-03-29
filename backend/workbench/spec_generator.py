@@ -9,7 +9,8 @@ client = anthropic.Anthropic()
 
 async def generate(agent_name: str, agents: list[dict], use_cases: list[dict],
                    config: dict | None = None, role: str = "operator",
-                   connected_operators: list[dict] | None = None) -> dict:
+                   connected_operators: list[dict] | None = None,
+                   org_settings: dict | None = None) -> dict:
     """Generate a complete agent spec from agents, use cases, and config.
 
     role: "operator" generates an MCP server wrapping a legacy API.
@@ -28,13 +29,16 @@ async def generate(agent_name: str, agents: list[dict], use_cases: list[dict],
 
     if role == "orchestrator":
         return await _generate_orchestrator(
-            agent_name, agents, use_cases, config, connected_operators or []
+            agent_name, agents, use_cases, config, connected_operators or [],
+            org_settings=org_settings,
         )
     else:
-        return await _generate_operator(agent_name, agents, use_cases, config)
+        return await _generate_operator(agent_name, agents, use_cases, config,
+                                        org_settings=org_settings)
 
 async def _generate_operator(agent_name: str, agents: list[dict],
-                             use_cases: list[dict], config: dict) -> dict:
+                             use_cases: list[dict], config: dict,
+                             org_settings: dict | None = None) -> dict:
     """Generate an MCP server implementation that wraps a legacy API."""
 
     # Build context from agents
@@ -139,6 +143,24 @@ async def _generate_operator(agent_name: str, agents: list[dict],
         if parts:
             config_section = "## Configuration & Requirements\n" + "\n".join(parts)
 
+    # Build org settings section
+    org_section = ""
+    if org_settings:
+        parts = []
+        if org_settings.get("tech_stack"): parts.append(f"- Language/Runtime: {org_settings['tech_stack']}")
+        if org_settings.get("framework"): parts.append(f"- Framework: {org_settings['framework']}")
+        if org_settings.get("mcp_sdk_version"): parts.append(f"- MCP SDK: {org_settings['mcp_sdk_version']}")
+        if org_settings.get("deployment"): parts.append(f"- Deployment: {org_settings['deployment']}")
+        if org_settings.get("error_handling"): parts.append(f"- Error Handling: {org_settings['error_handling']}")
+        if org_settings.get("retry_strategy"): parts.append(f"- Retry Strategy: {org_settings['retry_strategy']}")
+        if org_settings.get("logging"): parts.append(f"- Logging: {org_settings['logging']}")
+        if org_settings.get("auth_pattern"): parts.append(f"- Authentication: {org_settings['auth_pattern']}")
+        if org_settings.get("coding_standards"): parts.append(f"- Coding Standards: {org_settings['coding_standards']}")
+        if org_settings.get("communication"): parts.append(f"- Communication: {org_settings['communication']}")
+        if org_settings.get("org_rules"): parts.append(f"- Organization Rules: {org_settings['org_rules']}")
+        if parts:
+            org_section = "## Organization Standards\nAll agents in this organization follow these standards:\n" + "\n".join(parts)
+
     # Detect MCP agents for protocol-specific instructions
     has_mcp = any(s.get("api_type") == "mcp" for s in agents)
     has_rest = any(s.get("api_type") != "mcp" for s in agents)
@@ -161,6 +183,7 @@ to implement the MCP server from scratch. It must contain EVERYTHING needed — 
 ## MCP Server Name: {agent_name}
 
 {config_section}
+{org_section}
 {protocol_note}
 ## Legacy API to Wrap
 {chr(10).join(agents_ctx)}
@@ -280,7 +303,8 @@ Return ONLY valid JSON."""
 
 async def _generate_orchestrator(agent_name: str, agents: list[dict],
                                  use_cases: list[dict], config: dict,
-                                 connected_operators: list[dict]) -> dict:
+                                 connected_operators: list[dict],
+                                 org_settings: dict | None = None) -> dict:
     """Generate an orchestrator agent that connects to MCP operator servers."""
 
     # Build operator context — each connected operator with its tools
@@ -354,6 +378,24 @@ async def _generate_orchestrator(agent_name: str, agents: list[dict],
         if parts:
             config_section = "## Configuration & Requirements\n" + "\n".join(parts)
 
+    # Build org settings section
+    org_section = ""
+    if org_settings:
+        parts = []
+        if org_settings.get("tech_stack"): parts.append(f"- Language/Runtime: {org_settings['tech_stack']}")
+        if org_settings.get("framework"): parts.append(f"- Framework: {org_settings['framework']}")
+        if org_settings.get("mcp_sdk_version"): parts.append(f"- MCP SDK: {org_settings['mcp_sdk_version']}")
+        if org_settings.get("deployment"): parts.append(f"- Deployment: {org_settings['deployment']}")
+        if org_settings.get("error_handling"): parts.append(f"- Error Handling: {org_settings['error_handling']}")
+        if org_settings.get("retry_strategy"): parts.append(f"- Retry Strategy: {org_settings['retry_strategy']}")
+        if org_settings.get("logging"): parts.append(f"- Logging: {org_settings['logging']}")
+        if org_settings.get("auth_pattern"): parts.append(f"- Authentication: {org_settings['auth_pattern']}")
+        if org_settings.get("coding_standards"): parts.append(f"- Coding Standards: {org_settings['coding_standards']}")
+        if org_settings.get("communication"): parts.append(f"- Communication: {org_settings['communication']}")
+        if org_settings.get("org_rules"): parts.append(f"- Organization Rules: {org_settings['org_rules']}")
+        if parts:
+            org_section = "## Organization Standards\nAll agents in this organization follow these standards:\n" + "\n".join(parts)
+
     prompt = f"""You are a senior AI architect. Generate an orchestrator agent that connects to these
 MCP operator servers and uses Claude to decide which tools to call. This document will be given to
 Claude Code (an AI coding assistant) to implement the orchestrator from scratch.
@@ -361,6 +403,7 @@ Claude Code (an AI coding assistant) to implement the orchestrator from scratch.
 ## Orchestrator Name: {agent_name}
 
 {config_section}
+{org_section}
 
 ## Connected MCP Operator Servers
 {chr(10).join(operators_ctx) if operators_ctx else "No connected operators defined yet."}

@@ -20,6 +20,7 @@ export default defineConfig({
       "/workbench/generate-spec": "http://localhost:8000",
       "/workbench/specs": "http://localhost:8000",
       "/workbench/dashboard": "http://localhost:8000",
+      "/workbench/settings": "http://localhost:8000",
       "/workbench/seed": "http://localhost:8000",
     },
   },

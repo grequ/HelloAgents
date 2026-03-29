@@ -174,6 +174,24 @@ export interface SpecConfig {
   additional_context?: string;
 }
 
+// --- Org Settings ---
+
+export interface OrgSettings {
+  id: string;
+  tech_stack: string;
+  framework: string;
+  mcp_sdk_version: string;
+  deployment: string;
+  error_handling?: string;
+  retry_strategy?: string;
+  logging?: string;
+  auth_pattern?: string;
+  coding_standards?: string;
+  communication: string;
+  org_rules?: string;
+  updated_at?: string;
+}
+
 // --- Dashboard ---
 
 export interface DashboardData {

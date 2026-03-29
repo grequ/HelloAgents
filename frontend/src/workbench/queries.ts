@@ -7,6 +7,7 @@ import type {
   SpecConfig,
   AgentSpec,
   AgentConfig,
+  OrgSettings,
 } from "../types";
 
 // Re-export key type
@@ -96,6 +97,20 @@ export function useSpec(id: string) {
     queryKey: keys.spec(id),
     queryFn: () => api.getSpec(id),
     enabled: !!id,
+  });
+}
+
+// --- Org Settings ---
+
+export function useOrgSettings() {
+  return useQuery({ queryKey: ["orgSettings"], queryFn: api.getOrgSettings });
+}
+
+export function useUpdateOrgSettings() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: Partial<OrgSettings>) => api.updateOrgSettings(data),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["orgSettings"] }); },
   });
 }
 

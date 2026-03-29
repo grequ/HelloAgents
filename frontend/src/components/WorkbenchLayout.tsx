@@ -7,6 +7,7 @@ const NAV_ITEMS = [
       { to: "/workbench", label: "Dashboard", end: true },
       { to: "/workbench/specs", label: "Specs" },
       { to: "/workbench/map", label: "Map" },
+      { to: "/workbench/settings", label: "Settings" },
     ],
   },
   {
@@ -18,6 +19,7 @@ const NAV_ITEMS = [
 function pageTitle(pathname: string): string {
   if (pathname === "/workbench") return "Dashboard";
   if (pathname === "/workbench/map") return "Agent Architecture Map";
+  if (pathname === "/workbench/settings") return "Organization Settings";
   if (pathname === "/workbench/demo") return "Customer Support Demo";
   if (pathname.includes("/specs")) return "Specs";
   if (pathname.includes("/usecases")) return "Playground";
