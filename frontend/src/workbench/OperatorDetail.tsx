@@ -257,34 +257,42 @@ export default function OperatorDetail() {
               <div><span className="text-gray-500">Type:</span> <span className="text-text-primary">{isMcp ? "MCP Server" : agent.api_type}</span></div>
               <div><span className="text-gray-500">{isMcp ? "Server URI:" : "Base URL:"}</span> <span className="text-text-primary">{agent.api_base_url || "Not set"}</span></div>
               <div><span className="text-gray-500">Auth:</span> <span className="text-text-primary">{agent.api_auth_type}</span></div>
-              <div>
-                <span className="text-gray-500">{isMcp ? "Auth Token:" : "API Key:"}</span>{" "}
-                {agent.has_api_key ? (
-                  <span className="font-mono text-text-primary text-xs">{agent.api_key_preview || "***"}</span>
-                ) : (
-                  <span className="text-gray-400">Not set</span>
-                )}
-              </div>
               <div className="col-span-2"><span className="text-gray-500">{isMcp ? "Tool Definitions:" : "API Spec:"}</span> <span className="text-text-primary">{agent.has_api_spec ? `Loaded (${agent.api_spec_endpoint_count} ${isMcp ? "tools" : "endpoints"})` : "Not uploaded"}</span></div>
             </div>
             <div className="space-y-3">
-              {/* API Key — inline edit, saves on blur */}
-              <div className="flex items-center gap-2">
+              {/* API Key */}
+              <div className="flex gap-2">
                 {editingKey ? (
                   <>
-                    <input type="password" className={`${inp} flex-1`} placeholder={isMcp ? "New auth token" : "New API key"} value={apiKeyInput}
+                    <input type="password" className={`${inp} flex-1`}
+                      placeholder={isMcp ? "New auth token" : "New API key"}
+                      value={apiKeyInput}
                       onChange={(e) => setApiKeyInput(e.target.value)}
-                      onBlur={async () => {
-                        if (apiKeyInput) { await setApiKeyMut.mutateAsync({ id: id!, apiKey: apiKeyInput }); setApiKeyInput(""); }
-                        setEditingKey(false);
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" && apiKeyInput) {
+                          setApiKeyMut.mutate({ id: id!, apiKey: apiKeyInput }, { onSuccess: () => { setApiKeyInput(""); setEditingKey(false); } });
+                        }
+                        if (e.key === "Escape") { setEditingKey(false); setApiKeyInput(""); }
                       }}
-                      onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); if (e.key === "Escape") { setEditingKey(false); setApiKeyInput(""); } }}
                       autoFocus />
+                    <button className={`${btnGhost} self-start`} onClick={async () => {
+                      if (apiKeyInput) { await setApiKeyMut.mutateAsync({ id: id!, apiKey: apiKeyInput }); setApiKeyInput(""); }
+                      setEditingKey(false);
+                    }}>{setApiKeyMut.isPending ? "Saving..." : "Save Key"}</button>
                   </>
                 ) : (
-                  <button className={btnGhost} onClick={() => setEditingKey(true)}>
-                    {agent.has_api_key ? "Change API Key" : "Set API Key"}
-                  </button>
+                  <>
+                    <div className={`${inp} flex-1 flex items-center`}>
+                      {agent.has_api_key ? (
+                        <span className="font-mono text-xs text-text-primary">{agent.api_key_preview || "***"}</span>
+                      ) : (
+                        <span className="text-gray-400 text-sm">No API key set</span>
+                      )}
+                    </div>
+                    <button className={`${btnGhost} self-start`} onClick={() => setEditingKey(true)}>
+                      {agent.has_api_key ? "Change" : "Set Key"}
+                    </button>
+                  </>
                 )}
               </div>
               <div className="flex gap-2">
