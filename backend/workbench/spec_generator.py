@@ -156,6 +156,7 @@ async def _generate_operator(agent_name: str, agents: list[dict],
         if org_settings.get("auth_pattern"): parts.append(f"- Authentication: {org_settings['auth_pattern']}")
         if org_settings.get("coding_standards"): parts.append(f"- Coding Standards: {org_settings['coding_standards']}")
         if org_settings.get("communication"): parts.append(f"- Communication: {org_settings['communication']}")
+        if org_settings.get("ai_model"): parts.append(f"- AI Model: {org_settings['ai_model']}")
         if org_settings.get("org_rules"): parts.append(f"- Organization Rules: {org_settings['org_rules']}")
         if parts:
             org_section = "## Organization Standards\nAll agents in this organization follow these standards:\n" + "\n".join(parts)
@@ -390,6 +391,7 @@ async def _generate_orchestrator(agent_name: str, agents: list[dict],
         if org_settings.get("auth_pattern"): parts.append(f"- Authentication: {org_settings['auth_pattern']}")
         if org_settings.get("coding_standards"): parts.append(f"- Coding Standards: {org_settings['coding_standards']}")
         if org_settings.get("communication"): parts.append(f"- Communication: {org_settings['communication']}")
+        if org_settings.get("ai_model"): parts.append(f"- AI Model: {org_settings['ai_model']}")
         if org_settings.get("org_rules"): parts.append(f"- Organization Rules: {org_settings['org_rules']}")
         if parts:
             org_section = "## Organization Standards\nAll agents in this organization follow these standards:\n" + "\n".join(parts)

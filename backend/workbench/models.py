@@ -19,6 +19,7 @@ class OrgSettingsOut(BaseModel):
     auth_pattern: str | None = None
     coding_standards: str | None = None
     communication: str = "MCP (Model Context Protocol)"
+    ai_model: str | None = None
     org_rules: str | None = None
     updated_at: datetime | None = None
 

@@ -186,6 +186,7 @@ export interface OrgSettings {
   auth_pattern?: string;
   coding_standards?: string;
   communication: string;
+  ai_model?: string;
   org_rules?: string;
   updated_at?: string;
 }

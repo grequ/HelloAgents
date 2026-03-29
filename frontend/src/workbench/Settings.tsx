@@ -35,7 +35,7 @@ export default function Settings() {
 
   const [form, setForm] = useState<Partial<OrgSettings>>({
     tech_stack: "", framework: "", mcp_sdk_version: "", deployment: "",
-    communication: "", error_handling: "", retry_strategy: "",
+    communication: "", ai_model: "", error_handling: "", retry_strategy: "",
     logging: "", auth_pattern: "", coding_standards: "", org_rules: "",
   });
   const [loaded, setLoaded] = useState(false);
@@ -107,6 +107,14 @@ export default function Settings() {
             <input className={`${inp} bg-gray-50 text-gray-500`} value={form.communication || ""} readOnly />
           </Field>
         </div>
+      </div>
+
+      {/* AI Model */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5 space-y-4">
+        <h3 className="font-semibold text-text-primary text-sm">AI Model</h3>
+        <Field label="Model Strategy" hint="Which Claude models to use in generated agents and when to choose each tier">
+          <AutoTextarea className={inp} value={form.ai_model || ""} onChange={(v) => set("ai_model", v)} />
+        </Field>
       </div>
 
       {/* Resilience */}
