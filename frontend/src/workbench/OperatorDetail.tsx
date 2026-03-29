@@ -308,7 +308,52 @@ export default function OperatorDetail() {
         </div>
       </div>
 
-      {/* Section C: Generation Config (collapsible) */}
+      {/* Section C: MCP Tools (derived from discovered use cases) */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
+        <h3 className="font-semibold text-text-primary mb-3">MCP Tools</h3>
+        <p className="text-xs text-gray-400 mb-3">
+          Each use case with discovered endpoints becomes an MCP tool. Run Discovery on use cases in the Playground to generate tools.
+        </p>
+        {(() => {
+          const discoveredUcs = useCases.filter((uc) => uc.discovered_endpoints && uc.discovered_endpoints.length > 0);
+          if (discoveredUcs.length === 0) {
+            return <p className="text-sm text-gray-500 text-center py-3">No tools yet. Add use cases and run Discovery to map them to API endpoints.</p>;
+          }
+          return (
+            <div className="space-y-2">
+              {discoveredUcs.map((uc) => {
+                // Tool name from discovered behavior or use case name
+                const toolName = uc.name.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "");
+                return (
+                  <div key={uc.id} className="bg-gray-50 rounded-lg p-3 border border-gray-200">
+                    <div className="flex items-center justify-between mb-1">
+                      <code className="text-sm font-mono font-semibold text-tedee-navy">{toolName}</code>
+                      <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${uc.status === "tested" ? "bg-green-100 text-green-700" : "bg-blue-100 text-blue-700"}`}>
+                        {uc.status === "tested" ? "tested" : "discovered"}
+                      </span>
+                    </div>
+                    <p className="text-xs text-gray-500 mb-2">{uc.description || uc.trigger_text}</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {(uc.discovered_endpoints || []).map((ep, i) => (
+                        <span key={i} className="text-[10px] font-mono bg-white px-1.5 py-0.5 rounded border border-gray-200 text-gray-600">
+                          {ep.method} {ep.path}
+                        </span>
+                      ))}
+                    </div>
+                    {uc.is_write && <span className="inline-block mt-1.5 text-[10px] px-1.5 py-0.5 rounded bg-orange-100 text-orange-700 font-medium">WRITE</span>}
+                  </div>
+                );
+              })}
+              <p className="text-xs text-gray-400 mt-2">
+                {discoveredUcs.length} tool{discoveredUcs.length !== 1 ? "s" : ""} ready.
+                {useCases.length - discoveredUcs.length > 0 && ` ${useCases.length - discoveredUcs.length} use case${useCases.length - discoveredUcs.length !== 1 ? "s" : ""} still need discovery.`}
+              </p>
+            </div>
+          );
+        })()}
+      </div>
+
+      {/* Section D: Generation Config (collapsible) */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
         <button
           className="flex items-center justify-between w-full text-left"
