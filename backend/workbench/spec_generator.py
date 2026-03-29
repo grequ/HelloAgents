@@ -555,7 +555,7 @@ def _extract_text(response_text: str) -> str:
 async def _call_claude(prompt: str) -> str:
     response = client.messages.create(
         model="claude-opus-4-6",
-        max_tokens=8000,
+        max_tokens=16000,
         messages=[{"role": "user", "content": prompt}],
     )
     return _extract_text(response.content[0].text)
