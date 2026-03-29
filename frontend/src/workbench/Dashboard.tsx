@@ -194,7 +194,7 @@ export default function Dashboard() {
                 </button>
                 {connResult && (
                   <span className={`text-xs font-medium ${connResult.ok ? "text-green-600" : "text-red-600"}`}>
-                    {connResult.ok ? `Connected (${connResult.status_code})` : `Failed: ${connResult.error}`}
+                    {connResult.ok ? `Connected (${connResult.status_code})` : `Failed${connResult.status_code ? ` (${connResult.status_code})` : ""}${connResult.error ? `: ${connResult.error}` : ""}`}
                   </span>
                 )}
                 {!connResult && !testing && opForm.api_base_url.trim() && (

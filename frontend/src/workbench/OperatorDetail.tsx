@@ -345,7 +345,7 @@ export default function OperatorDetail() {
                   <button className={btnGhost} onClick={() => testConn.mutate(id!)} disabled={testConn.isPending}>
                     {testConn.isPending ? "Testing..." : "Test Connection"}
                   </button>
-                  {testConn.data && <span className={`text-xs font-medium ${testConn.data.ok ? "text-green-600" : "text-red-600"}`}>{testConn.data.ok ? `Connected (${testConn.data.status_code})` : `Failed: ${testConn.data.error}`}</span>}
+                  {testConn.data && <span className={`text-xs font-medium ${testConn.data.ok ? "text-green-600" : "text-red-600"}`}>{testConn.data.ok ? `Connected (${testConn.data.status_code})` : `Failed${testConn.data.status_code ? ` (${testConn.data.status_code})` : ""}${testConn.data.error ? `: ${testConn.data.error}` : ""}`}</span>}
                 </div>
               )}
             </div>

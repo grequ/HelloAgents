@@ -163,22 +163,33 @@ async def test_connection(agent_id: str):
 
 @router.post("/test-url")
 async def test_url(body: dict):
-    """Test a URL + API key without creating an agent."""
+    """Test a URL + API key. Tries multiple auth methods to find one that works."""
     url = body.get("url", "")
     api_key = body.get("api_key", "")
-    auth_type = body.get("auth_type", "bearer")
     if not url:
         raise HTTPException(400, "url is required")
     import httpx
-    headers = {}
-    if auth_type == "bearer" and api_key:
-        headers["Authorization"] = f"Bearer {api_key}"
-    elif auth_type == "api_key_header" and api_key:
-        headers["X-Api-Key"] = api_key
+
+    # Auth methods to try (in order)
+    auth_attempts = [{}]  # No auth first
+    if api_key:
+        auth_attempts = [
+            {"Authorization": f"Bearer {api_key}"},
+            {"apikey": api_key},
+            {"X-Api-Key": api_key},
+            {"Api-Key": api_key},
+            {"Authorization": f"Api-Key {api_key}"},
+        ]
+
     try:
         async with httpx.AsyncClient(timeout=10.0) as http:
-            resp = await http.get(url, headers=headers)
-        return {"ok": resp.status_code < 400, "status_code": resp.status_code}
+            for headers in auth_attempts:
+                resp = await http.get(url, headers=headers)
+                if resp.status_code < 400:
+                    auth_method = next(iter(headers.keys()), "none") if headers else "none"
+                    return {"ok": True, "status_code": resp.status_code, "auth_method": auth_method}
+            # None worked — return the last attempt's status
+            return {"ok": False, "status_code": resp.status_code, "error": f"HTTP {resp.status_code} — tried {len(auth_attempts)} auth methods"}
     except Exception as e:
         return {"ok": False, "error": str(e)}
 
