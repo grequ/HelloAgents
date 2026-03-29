@@ -237,6 +237,7 @@ export function useDeleteUseCase() {
     mutationFn: (id: string) => api.deleteUseCase(id),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: keys.dashboard });
+      qc.invalidateQueries({ queryKey: ["useCases"] });
     },
   });
 }
