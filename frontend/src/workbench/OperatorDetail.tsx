@@ -271,12 +271,12 @@ export default function OperatorDetail() {
               {/* API Key */}
               <div className="flex gap-2">
                 {editingKey ? (
-                  <input type="password" className={`${inp} flex-1`}
+                  <input type="text" autoComplete="off" data-1p-ignore data-lpignore="true"
+                    className={`${inp} flex-1 font-mono tracking-widest`}
                     placeholder={isMcp ? "Enter new auth token" : "Enter new API key"}
                     value={apiKeyInput}
                     onChange={(e) => { setApiKeyInput(e.target.value); setDirty(true); }}
-                    onKeyDown={(e) => { if (e.key === "Escape") { setEditingKey(false); setApiKeyInput(""); } }}
-                    autoFocus />
+                    onKeyDown={(e) => { if (e.key === "Escape") { setEditingKey(false); setApiKeyInput(""); } }} />
                 ) : (
                   <div className={`${inp} flex-1 flex items-center`}>
                     {agent.has_api_key ? (
