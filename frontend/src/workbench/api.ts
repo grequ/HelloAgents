@@ -193,6 +193,10 @@ export async function discoverEndpoints(spec: unknown, agentName: string): Promi
 }
 
 // Agent Tools
+export async function listAllTools(): Promise<AgentTool[]> {
+  return request<AgentTool[]>("GET", "/tools");
+}
+
 export async function listTools(agentId: string): Promise<AgentTool[]> {
   return request<AgentTool[]>("GET", `/agents/${agentId}/tools`);
 }

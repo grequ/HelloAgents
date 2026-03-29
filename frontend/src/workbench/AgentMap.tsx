@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import { Link } from "react-router-dom";
-import { useSpecs, useAgents, useAllInteractions } from "./queries";
-import type { AgentSpec, Agent } from "../types";
+import { useSpecs, useAgents, useAllInteractions, useAllTools } from "./queries";
+import type { AgentSpec, Agent, AgentTool } from "../types";
 import type { InteractionRow } from "./api";
 
 // --- Types ---
@@ -85,7 +85,7 @@ function buildOrchestratorConnections(agents: Agent[], interactions: Interaction
 
 // --- Build nodes from agents (primary) enriched with spec data ---
 
-function buildNodes(agents: Agent[], specs: AgentSpec[], interactions: InteractionRow[]): MapNode[] {
+function buildNodes(agents: Agent[], specs: AgentSpec[], interactions: InteractionRow[], allTools: AgentTool[]): MapNode[] {
   // Map agent_id → spec (best match)
   const agentToSpec = new Map<string, AgentSpec>();
   for (const spec of specs) {
@@ -94,18 +94,31 @@ function buildNodes(agents: Agent[], specs: AgentSpec[], interactions: Interacti
     }
   }
 
+  // Map agent_id → persisted tools
+  const agentToTools = new Map<string, ToolDef[]>();
+  for (const tool of allTools) {
+    const list = agentToTools.get(tool.agent_id) || [];
+    list.push({ name: tool.name, description: tool.description });
+    agentToTools.set(tool.agent_id, list);
+  }
+
   const orchConnections = buildOrchestratorConnections(agents, interactions);
 
   return agents.map((agent) => {
     const spec = agentToSpec.get(agent.id);
+    // Priority: persisted tools > spec tools > empty
+    const persistedTools = agentToTools.get(agent.id);
+    const specTools = spec ? parseTools(spec.tools_json) : [];
+    const tools = persistedTools && persistedTools.length > 0 ? persistedTools : specTools;
+
     return {
       id: agent.id,
       name: agent.name,
       agentRole: agent.agent_role,
-      tools: spec ? parseTools(spec.tools_json) : [],
+      tools,
       connectedOperators: orchConnections.get(agent.id) || [],
       status: spec ? spec.status : agent.status,
-      linkTo: spec ? `/workbench/specs/${spec.id}` : `/workbench/agents/${agent.id}`,
+      linkTo: `/workbench/agents/${agent.id}`,
       hasSpec: !!spec,
       x: 0,
       y: 0,
@@ -190,13 +203,14 @@ export default function AgentMap() {
   const { data: specs = [], isLoading: specsLoading } = useSpecs();
   const { data: agents = [], isLoading: agentsLoading } = useAgents();
   const { data: interactions = [], isLoading: intLoading } = useAllInteractions();
+  const { data: allTools = [], isLoading: toolsLoading } = useAllTools();
 
-  const nodes = useMemo(() => buildNodes(agents, specs, interactions), [agents, specs, interactions]);
+  const nodes = useMemo(() => buildNodes(agents, specs, interactions, allTools), [agents, specs, interactions, allTools]);
   const edges = useMemo(() => buildEdges(agents, interactions), [agents, interactions]);
 
   useMemo(() => layoutNodes(nodes, edges), [nodes, edges]);
 
-  if (specsLoading || agentsLoading || intLoading) return <p className="text-sm text-gray-500">Loading...</p>;
+  if (specsLoading || agentsLoading || intLoading || toolsLoading) return <p className="text-sm text-gray-500">Loading...</p>;
 
   if (agents.length === 0) {
     return (
@@ -292,7 +306,7 @@ export default function AgentMap() {
             const items = isOrchestrator ? node.connectedOperators : node.tools;
             const emptyText = isOrchestrator
               ? (node.hasSpec ? "(no connected operators)" : "(generate spec to see connections)")
-              : (node.hasSpec ? "(no tools defined)" : "(generate spec to see tools)");
+              : "(no tools yet)";
 
             return (
               <g key={node.id} className="cursor-pointer">

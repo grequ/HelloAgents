@@ -80,6 +80,10 @@ export function useInteractions(agentId: string) {
   });
 }
 
+export function useAllTools() {
+  return useQuery({ queryKey: ["allTools"], queryFn: api.listAllTools });
+}
+
 export function useTools(agentId: string) {
   return useQuery({
     queryKey: keys.tools(agentId),

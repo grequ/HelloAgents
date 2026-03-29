@@ -352,6 +352,10 @@ async def discover_endpoints(body: dict):
 
 # ---- Agent Tools ----
 
+@router.get("/tools", response_model=list[AgentToolOut])
+async def list_all_tools():
+    return await wb_db.list_all_tools()
+
 @router.get("/agents/{agent_id}/tools", response_model=list[AgentToolOut])
 async def list_tools(agent_id: str):
     return await wb_db.list_tools(agent_id)

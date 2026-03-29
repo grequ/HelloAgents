@@ -388,6 +388,15 @@ async def update_agent_status(agent_id: str, status: str):
 
 # ---- Agent Tools ----
 
+async def list_all_tools() -> list[dict]:
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        async with conn.cursor(dict_cursor()) as cur:
+            await cur.execute("SELECT * FROM wb_agent_tools ORDER BY agent_id, name")
+            rows = await cur.fetchall()
+    return [_row_to_tool(r) for r in rows]
+
+
 async def list_tools(agent_id: str) -> list[dict]:
     pool = await get_pool()
     async with pool.acquire() as conn:
