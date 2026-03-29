@@ -3,8 +3,6 @@ import type { OrgSettings } from "../types";
 import { useOrgSettings, useUpdateOrgSettings } from "./queries";
 import { btnPrimary, inp } from "./ui";
 
-// --- Auto-sizing textarea ---
-
 function AutoTextarea({ value, onChange, placeholder, className }: {
   value: string; onChange: (v: string) => void; placeholder?: string; className?: string;
 }) {
@@ -21,49 +19,35 @@ function AutoTextarea({ value, onChange, placeholder, className }: {
   );
 }
 
-// --- Component ---
+function Field({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <label className="block text-xs font-medium text-gray-700 mb-0.5">{label}</label>
+      {hint && <p className="text-[11px] text-gray-400 mb-1.5">{hint}</p>}
+      {children}
+    </div>
+  );
+}
 
 export default function Settings() {
   const { data: settings, isLoading } = useOrgSettings();
   const updateSettings = useUpdateOrgSettings();
 
   const [form, setForm] = useState<Partial<OrgSettings>>({
-    tech_stack: "",
-    framework: "",
-    mcp_sdk_version: "",
-    deployment: "",
-    communication: "MCP (Model Context Protocol)",
-    error_handling: "",
-    retry_strategy: "",
-    logging: "",
-    auth_pattern: "",
-    coding_standards: "",
-    org_rules: "",
+    tech_stack: "", framework: "", mcp_sdk_version: "", deployment: "",
+    communication: "", error_handling: "", retry_strategy: "",
+    logging: "", auth_pattern: "", coding_standards: "", org_rules: "",
   });
   const [loaded, setLoaded] = useState(false);
   const [saved, setSaved] = useState(false);
 
   useEffect(() => {
     if (!settings || loaded) return;
-    setForm({
-      tech_stack: settings.tech_stack || "",
-      framework: settings.framework || "",
-      mcp_sdk_version: settings.mcp_sdk_version || "",
-      deployment: settings.deployment || "",
-      communication: settings.communication || "MCP (Model Context Protocol)",
-      error_handling: settings.error_handling || "",
-      retry_strategy: settings.retry_strategy || "",
-      logging: settings.logging || "",
-      auth_pattern: settings.auth_pattern || "",
-      coding_standards: settings.coding_standards || "",
-      org_rules: settings.org_rules || "",
-    });
+    setForm({ ...settings });
     setLoaded(true);
   }, [settings, loaded]);
 
-  const set = (key: keyof OrgSettings, value: string) => {
-    setForm((prev) => ({ ...prev, [key]: value }));
-  };
+  const set = (key: keyof OrgSettings, value: string) => setForm((prev) => ({ ...prev, [key]: value }));
 
   const handleSave = async () => {
     try {
@@ -82,9 +66,9 @@ export default function Settings() {
       {/* Header */}
       <div className="flex items-start justify-between">
         <div>
-          <h2 className="text-xl font-bold text-text-primary">Organization Settings</h2>
+          <h2 className="text-xl font-bold text-text-primary">Organization Standards</h2>
           <p className="text-sm text-gray-500 mt-1">
-            These standards apply to all generated agent specifications. Configure once, every agent follows the same architecture.
+            Defined once, enforced in every generated agent. Ensures consistent architecture, patterns, and quality across all operators and orchestrators.
           </p>
         </div>
         <button className={btnPrimary} onClick={handleSave} disabled={updateSettings.isPending}>
@@ -92,64 +76,72 @@ export default function Settings() {
         </button>
       </div>
 
-      {/* Fields */}
+      {/* Runtime & Infrastructure */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5 space-y-4">
+        <h3 className="font-semibold text-text-primary text-sm">Runtime & Infrastructure</h3>
+        <div className="grid grid-cols-3 gap-4">
+          <Field label="Language" hint="Primary language for all agents">
+            <input className={inp} value={form.tech_stack || ""} onChange={(e) => set("tech_stack", e.target.value)} />
+          </Field>
+          <Field label="Framework" hint="Web framework + SDK dependencies">
+            <input className={inp} value={form.framework || ""} onChange={(e) => set("framework", e.target.value)} />
+          </Field>
+          <Field label="MCP SDK" hint="Model Context Protocol SDK version">
+            <input className={inp} value={form.mcp_sdk_version || ""} onChange={(e) => set("mcp_sdk_version", e.target.value)} />
+          </Field>
+        </div>
         <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label className="block text-xs text-gray-500 mb-1">Tech Stack</label>
-            <input className={inp} value={form.tech_stack || ""} onChange={(e) => set("tech_stack", e.target.value)} placeholder="e.g. Python 3.12" />
-          </div>
-          <div>
-            <label className="block text-xs text-gray-500 mb-1">Framework</label>
-            <input className={inp} value={form.framework || ""} onChange={(e) => set("framework", e.target.value)} placeholder="e.g. FastAPI + MCP SDK + anthropic SDK" />
-          </div>
+          <Field label="Deployment" hint="How agents are packaged and deployed">
+            <input className={inp} value={form.deployment || ""} onChange={(e) => set("deployment", e.target.value)} />
+          </Field>
+          <Field label="Communication" hint="Inter-agent protocol">
+            <input className={`${inp} bg-gray-50 text-gray-500`} value={form.communication || ""} readOnly />
+          </Field>
         </div>
+      </div>
 
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label className="block text-xs text-gray-500 mb-1">MCP SDK Version</label>
-            <input className={inp} value={form.mcp_sdk_version || ""} onChange={(e) => set("mcp_sdk_version", e.target.value)} placeholder="e.g. 1.x" />
-          </div>
-          <div>
-            <label className="block text-xs text-gray-500 mb-1">Deployment</label>
-            <input className={inp} value={form.deployment || ""} onChange={(e) => set("deployment", e.target.value)} placeholder="e.g. Docker containers" />
-          </div>
-        </div>
+      {/* Resilience */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5 space-y-4">
+        <h3 className="font-semibold text-text-primary text-sm">Resilience & Error Handling</h3>
+        <Field label="Error Handling" hint="How agents handle failures from downstream APIs">
+          <AutoTextarea className={inp} value={form.error_handling || ""} onChange={(v) => set("error_handling", v)} />
+        </Field>
+        <Field label="Retry & Circuit Breaker" hint="Backoff strategy, max attempts, circuit breaker thresholds">
+          <AutoTextarea className={inp} value={form.retry_strategy || ""} onChange={(v) => set("retry_strategy", v)} />
+        </Field>
+      </div>
 
-        <div>
-          <label className="block text-xs text-gray-500 mb-1">Communication Protocol</label>
-          <input className={`${inp} bg-gray-50 text-gray-500`} value={form.communication || "MCP (Model Context Protocol)"} readOnly />
-        </div>
+      {/* Observability */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5 space-y-4">
+        <h3 className="font-semibold text-text-primary text-sm">Observability</h3>
+        <Field label="Logging" hint="Log format, fields, correlation, PII handling">
+          <AutoTextarea className={inp} value={form.logging || ""} onChange={(v) => set("logging", v)} />
+        </Field>
+      </div>
 
-        <div>
-          <label className="block text-xs text-gray-500 mb-1">Error Handling</label>
-          <AutoTextarea className={inp} value={form.error_handling || ""} onChange={(v) => set("error_handling", v)} placeholder="e.g. Retry once on 5xx, return graceful error message to user on failure" />
-        </div>
+      {/* Security */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5 space-y-4">
+        <h3 className="font-semibold text-text-primary text-sm">Security & Authentication</h3>
+        <Field label="Credentials & Auth" hint="How agents handle API keys, tokens, and secrets">
+          <AutoTextarea className={inp} value={form.auth_pattern || ""} onChange={(v) => set("auth_pattern", v)} />
+        </Field>
+      </div>
 
-        <div>
-          <label className="block text-xs text-gray-500 mb-1">Retry Strategy</label>
-          <AutoTextarea className={inp} value={form.retry_strategy || ""} onChange={(v) => set("retry_strategy", v)} placeholder="e.g. Exponential backoff, max 3 retries" />
-        </div>
+      {/* Code Quality */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5 space-y-4">
+        <h3 className="font-semibold text-text-primary text-sm">Code Quality</h3>
+        <Field label="Coding Standards" hint="Naming conventions, typing, documentation, architecture patterns">
+          <AutoTextarea className={inp} value={form.coding_standards || ""} onChange={(v) => set("coding_standards", v)} />
+        </Field>
+      </div>
 
-        <div>
-          <label className="block text-xs text-gray-500 mb-1">Logging</label>
-          <AutoTextarea className={inp} value={form.logging || ""} onChange={(v) => set("logging", v)} placeholder="e.g. Structured JSON logs, correlation IDs" />
-        </div>
-
-        <div>
-          <label className="block text-xs text-gray-500 mb-1">Authentication Pattern</label>
-          <AutoTextarea className={inp} value={form.auth_pattern || ""} onChange={(v) => set("auth_pattern", v)} placeholder="e.g. API keys from environment variables" />
-        </div>
-
-        <div>
-          <label className="block text-xs text-gray-500 mb-1">Coding Standards</label>
-          <AutoTextarea className={inp} value={form.coding_standards || ""} onChange={(v) => set("coding_standards", v)} placeholder="e.g. Type hints required, docstrings on all public functions" />
-        </div>
-
-        <div>
-          <label className="block text-xs text-gray-500 mb-1">Organization-Specific Rules</label>
-          <AutoTextarea className={inp} value={form.org_rules || ""} onChange={(v) => set("org_rules", v)} placeholder="e.g. All agents must log to central observability platform" />
-        </div>
+      {/* Organization Rules */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5 space-y-4">
+        <h3 className="font-semibold text-text-primary text-sm">Organization Rules</h3>
+        <Field label="Custom Rules" hint="Compliance, security policies, rate limits, domain-specific constraints">
+          <AutoTextarea className={inp} value={form.org_rules || ""} onChange={(v) => set("org_rules", v)}
+            placeholder="e.g. All agents must comply with GDPR data handling requirements. PII must not be stored in agent logs or passed to third-party services." />
+        </Field>
       </div>
     </div>
   );

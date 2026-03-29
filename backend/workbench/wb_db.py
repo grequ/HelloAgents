@@ -199,14 +199,21 @@ async def ensure_schema():
             await cur.execute("SELECT COUNT(*) FROM wb_org_settings")
             row = await cur.fetchone()
             if row[0] == 0:
-                await cur.execute("""INSERT INTO wb_org_settings (id, error_handling, retry_strategy, logging, auth_pattern, coding_standards, org_rules)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s)""",
+                await cur.execute("""INSERT INTO wb_org_settings
+                    (id, tech_stack, framework, mcp_sdk_version, deployment, communication,
+                     error_handling, retry_strategy, logging, auth_pattern, coding_standards, org_rules)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""",
                     (_new_id(),
-                     'Retry once on 5xx with exponential backoff. Return graceful error message to caller on failure. Log all errors with context.',
-                     'Max 3 retries with 1s/2s/4s delays for transient failures. Circuit breaker after 5 consecutive failures.',
-                     'Structured JSON logging. Log tool calls, API requests, errors, and latency. No sensitive data in logs.',
-                     'API keys from environment variables. Bearer token auth. Never hardcode credentials.',
-                     'snake_case for functions/variables. PascalCase for classes. Type hints required. Docstrings on public functions.',
+                     'Python 3.12',
+                     'FastAPI + MCP Python SDK (mcp) + Anthropic Python SDK',
+                     'mcp >= 1.0',
+                     'Docker container per agent. One MCP server = one container. Orchestrated via Docker Compose or Kubernetes.',
+                     'MCP (Model Context Protocol) over stdio or SSE. Every operator exposes tools via MCP. Orchestrators connect as MCP clients.',
+                     'Fail fast on 4xx (client error — do not retry). Retry transient 5xx/timeouts with exponential backoff (1s, 2s, 4s). Return structured error to caller: {error: string, code: string, retryable: bool}. Never swallow exceptions silently.',
+                     'Exponential backoff: base 1s, max 3 attempts, jitter ±200ms. Circuit breaker: open after 5 failures in 60s, half-open after 30s. Timeout: 10s per API call, 30s per tool execution.',
+                     'Structured JSON to stdout (12-factor). Fields: timestamp, level, tool_name, operation, duration_ms, status. Correlation ID propagated across tool calls. PII redacted (mask emails, tokens, keys). Log every tool invocation and API call at INFO, errors at ERROR with full context.',
+                     'Secrets via environment variables only — never in code, config files, or logs. MCP auth: bearer token in transport headers. Legacy API auth: per-operator config (bearer, API key header, OAuth2 client credentials). Rotate credentials via secrets manager.',
+                     'Python: snake_case functions/variables, PascalCase classes, UPPER_SNAKE constants. Type hints on all function signatures. Docstrings on every tool handler (becomes the MCP tool description). async/await for all I/O. No global mutable state. Each tool handler is a pure function: inputs → API calls → structured output.',
                      ''))
 
 
