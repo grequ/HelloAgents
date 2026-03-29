@@ -267,6 +267,7 @@ export default function Playground() {
           <button className={btnPrimary} onClick={handleSaveUseCase} disabled={isNew ? createUcMut.isPending || !ucName.trim() : !anyDirty}>
             {ucSaved ? "Saved!" : isNew ? (createUcMut.isPending ? "Creating..." : "Create & Save") : anyDirty ? "\u25CF Save" : "Save"}
           </button>
+          {anyDirty && !isNew && <button className={btnSecondary} onClick={() => window.location.reload()}>Cancel</button>}
           {!isNew && (
             <button className={btnSecondary} onClick={handleMarkComplete}
               disabled={status !== "tested" || completeUcMut.isPending}>

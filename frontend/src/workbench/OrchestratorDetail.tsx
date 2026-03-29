@@ -219,6 +219,7 @@ export default function OrchestratorDetail() {
           <button className={btnPrimary} onClick={handleSave} disabled={isSaving || !dirty}>
             {saved ? "Saved!" : dirty ? "\u25CF Save" : "Save"}
           </button>
+          {dirty && <button className={btnSecondary} onClick={() => { window.location.reload(); }}>Cancel</button>}
           <button className={btnSecondary} onClick={handleGenerate} disabled={genSpec.isPending}>
             {genSpec.isPending ? "Generating..." : "Generate"}
           </button>

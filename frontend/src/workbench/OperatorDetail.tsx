@@ -12,21 +12,12 @@ import { btnPrimary, btnSecondary, btnDanger, btnGhost, btnGhostDanger, btnGhost
 
 // --- Tool Card ---
 
-function ToolCard({ tool, useCaseNames }: { tool: AgentTool; useCaseNames: Record<string, string> }) {
-  const [name, setName] = useState(tool.name);
-  const [desc, setDesc] = useState(tool.description);
-  const [localDirty, setLocalDirty] = useState(false);
+interface ToolEdit { name: string; description: string }
+
+function ToolCard({ tool, edit, onChange, onDelete, useCaseNames }: {
+  tool: AgentTool; edit: ToolEdit; onChange: (e: ToolEdit) => void; onDelete: () => void; useCaseNames: Record<string, string>;
+}) {
   const updateTool = useUpdateTool();
-  const deleteTool = useDeleteTool();
-
-  useEffect(() => { setName(tool.name); setDesc(tool.description); setLocalDirty(false); }, [tool.name, tool.description]);
-
-  const handleBlurSave = () => {
-    if (!localDirty) return;
-    updateTool.mutate({ id: tool.id, data: { name, description: desc } }, {
-      onSuccess: () => { setLocalDirty(false); },
-    });
-  };
   const toggleStatus = () => {
     const next = tool.status === "completed" ? "draft" : "completed";
     updateTool.mutate({ id: tool.id, data: { status: next } });
@@ -37,49 +28,29 @@ function ToolCard({ tool, useCaseNames }: { tool: AgentTool; useCaseNames: Recor
       <div className="flex items-center gap-2 mb-1">
         <input
           className="flex-1 min-w-0 font-mono text-sm font-semibold text-tedee-navy bg-transparent border-b border-transparent hover:border-gray-300 focus:border-tedee-cyan outline-none"
-          value={name}
-          onChange={(e) => { setName(e.target.value); setLocalDirty(true); }}
-          onBlur={handleBlurSave}
-          onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
+          value={edit.name}
+          onChange={(e) => onChange({ ...edit, name: e.target.value })}
         />
         <div className="flex items-center gap-2 shrink-0">
-          {tool.is_write && (
-            <span className="text-[10px] px-1.5 py-0.5 rounded bg-orange-100 text-orange-700 font-medium">WRITE</span>
-          )}
-          <button
-            onClick={toggleStatus}
-            className={`text-[10px] px-1.5 py-0.5 rounded font-medium cursor-pointer ${
-              tool.status === "completed" ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"
-            }`}
-          >
+          {tool.is_write && <span className="text-[10px] px-1.5 py-0.5 rounded bg-orange-100 text-orange-700 font-medium">WRITE</span>}
+          <button onClick={toggleStatus} className={`text-[10px] px-1.5 py-0.5 rounded font-medium cursor-pointer ${tool.status === "completed" ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}>
             {tool.status}
           </button>
-          <button
-            onClick={() => { if (confirm("Delete this tool?")) deleteTool.mutate(tool.id); }}
-            className="inline-flex items-center justify-center rounded-md px-2 py-1 text-[10px] font-medium text-red-600 hover:bg-red-50"
-          >
-            Delete
-          </button>
+          <button onClick={() => { if (confirm("Delete this tool?")) onDelete(); }} className="inline-flex items-center justify-center rounded-md px-2 py-1 text-[10px] font-medium text-red-600 hover:bg-red-50">Delete</button>
         </div>
       </div>
       <input
         className="w-full text-xs text-gray-500 bg-transparent border-b border-transparent hover:border-gray-300 focus:border-tedee-cyan outline-none mb-2"
-        value={desc}
-        onChange={(e) => { setDesc(e.target.value); setLocalDirty(true); }}
-        onBlur={handleBlurSave}
-        onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
+        value={edit.description}
+        onChange={(e) => onChange({ ...edit, description: e.target.value })}
       />
       <div className="flex flex-wrap gap-1.5">
         {tool.endpoints.map((ep, i) => (
-          <span key={i} className="text-[10px] font-mono bg-white px-1.5 py-0.5 rounded border border-gray-200 text-gray-600">
-            {ep.method} {ep.path}
-          </span>
+          <span key={i} className="text-[10px] font-mono bg-white px-1.5 py-0.5 rounded border border-gray-200 text-gray-600">{ep.method} {ep.path}</span>
         ))}
       </div>
       {tool.use_case_ids && tool.use_case_ids.length > 0 && (
-        <p className="text-[10px] text-gray-400 mt-2">
-          Covers: {tool.use_case_ids.map((ucId) => useCaseNames[ucId] || ucId).join(", ")}
-        </p>
+        <p className="text-[10px] text-gray-400 mt-2">Covers: {tool.use_case_ids.map((ucId) => useCaseNames[ucId] || ucId).join(", ")}</p>
       )}
     </div>
   );
@@ -132,13 +103,24 @@ export default function OperatorDetail() {
     }
   }, [agent]);
 
-  // Load name/description
+  // Tool edits (lifted to page level)
+  const [toolEdits, setToolEdits] = useState<Record<string, ToolEdit>>({});
+
+  // Load name/description + init tool edits
   useEffect(() => {
     if (!agent || nameLoaded) return;
     setEditName(agent.name || "");
     setEditDesc(agent.description || "");
     setNameLoaded(true);
   }, [agent, nameLoaded]);
+
+  useEffect(() => {
+    if (tools.length > 0 && Object.keys(toolEdits).length === 0) {
+      const edits: Record<string, ToolEdit> = {};
+      for (const t of tools) edits[t.id] = { name: t.name, description: t.description };
+      setToolEdits(edits);
+    }
+  }, [tools]);
 
   // beforeunload warning
   useEffect(() => {
@@ -151,7 +133,17 @@ export default function OperatorDetail() {
     if (!agent || !dirty) return;
     setSaving(true);
     try {
-      await updateAg.mutateAsync({ id: id!, data: { name: editName, description: editDesc } });
+      // Save name/description
+      if (editName !== agent.name || editDesc !== agent.description) {
+        await updateAg.mutateAsync({ id: id!, data: { name: editName, description: editDesc } });
+      }
+      // Save tool edits
+      for (const t of tools) {
+        const edit = toolEdits[t.id];
+        if (edit && (edit.name !== t.name || edit.description !== t.description)) {
+          await updateToolMut.mutateAsync({ id: t.id, data: { name: edit.name, description: edit.description } });
+        }
+      }
       setDirty(false);
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
@@ -160,8 +152,14 @@ export default function OperatorDetail() {
     }
   };
 
-  const handleSaveNameDesc = async () => {
-    // kept for onBlur — no-op now, edits saved via header Save
+  const handleCancel = () => {
+    if (!agent) return;
+    setEditName(agent.name || "");
+    setEditDesc(agent.description || "");
+    const edits: Record<string, ToolEdit> = {};
+    for (const t of tools) edits[t.id] = { name: t.name, description: t.description };
+    setToolEdits(edits);
+    setDirty(false);
   };
 
   // --- Other handlers ---
@@ -222,6 +220,7 @@ export default function OperatorDetail() {
           <button className={btnPrimary} onClick={handleSave} disabled={saving || !dirty}>
             {saved ? "Saved!" : dirty ? "\u25CF Save" : "Save"}
           </button>
+          {dirty && <button className={btnSecondary} onClick={handleCancel}>Cancel</button>}
           <button className={btnSecondary} onClick={handleGenerate} disabled={genSpec.isPending || useCases.length === 0}>
             {genSpec.isPending ? "Generating..." : "Generate"}
           </button>
@@ -239,16 +238,12 @@ export default function OperatorDetail() {
             className="w-full text-xl font-bold text-text-primary bg-transparent border-b border-transparent hover:border-gray-300 focus:border-tedee-cyan outline-none mb-1"
             value={editName}
             onChange={(e) => { setEditName(e.target.value); setDirty(true); }}
-            onBlur={handleSaveNameDesc}
-            onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
             placeholder="Agent name"
           />
           <input
             className="w-full text-sm text-gray-500 bg-transparent border-b border-transparent hover:border-gray-300 focus:border-tedee-cyan outline-none"
             value={editDesc}
             onChange={(e) => { setEditDesc(e.target.value); setDirty(true); }}
-            onBlur={handleSaveNameDesc}
-            onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
             placeholder="Description"
           />
         </div>
@@ -385,7 +380,11 @@ export default function OperatorDetail() {
           return tools.length > 0 ? (
             <div className="space-y-2">
               {tools.map((tool) => (
-                <ToolCard key={tool.id} tool={tool} useCaseNames={ucNames} />
+                <ToolCard key={tool.id} tool={tool}
+                  edit={toolEdits[tool.id] || { name: tool.name, description: tool.description }}
+                  onChange={(e) => { setToolEdits((prev) => ({ ...prev, [tool.id]: e })); setDirty(true); }}
+                  onDelete={() => deleteToolMut.mutate(tool.id)}
+                  useCaseNames={ucNames} />
               ))}
               <p className="text-xs text-gray-400 mt-2">
                 {tools.length} tool{tools.length !== 1 ? "s" : ""} &bull;{" "}

@@ -116,6 +116,7 @@ export default function AgentSpecView() {
           <button className={btnPrimary} onClick={handleSave} disabled={!dirty || updateSpec.isPending}>
             {saved ? "Saved!" : dirty ? "\u25CF Save" : "Save"}
           </button>
+          {dirty && <button className={btnSecondary} onClick={() => window.location.reload()}>Cancel</button>}
           <button className={btnSecondary} onClick={handleCopyMarkdown}>
             {copied ? "Copied!" : "Copy .md"}
           </button>
