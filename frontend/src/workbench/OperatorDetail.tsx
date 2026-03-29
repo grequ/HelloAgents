@@ -56,19 +56,24 @@ function generateAdditionalContext(agent: { name: string; api_type: string; api_
 
 // --- Tool Card ---
 
-function ToolCard({ tool }: { tool: AgentTool }) {
+function ToolCard({ tool, useCaseNames, onSaved }: { tool: AgentTool; useCaseNames: Record<string, string>; onSaved?: () => void }) {
   const [name, setName] = useState(tool.name);
   const [desc, setDesc] = useState(tool.description);
+  const [dirty, setDirty] = useState(false);
+  const [saved, setSaved] = useState(false);
   const updateTool = useUpdateTool();
   const deleteTool = useDeleteTool();
 
-  useEffect(() => { setName(tool.name); }, [tool.name]);
-  useEffect(() => { setDesc(tool.description); }, [tool.description]);
+  useEffect(() => { setName(tool.name); setDesc(tool.description); setDirty(false); }, [tool.name, tool.description]);
 
-  const saveName = () => { if (name !== tool.name) updateTool.mutate({ id: tool.id, data: { name } }); };
-  const saveDesc = () => { if (desc !== tool.description) updateTool.mutate({ id: tool.id, data: { description: desc } }); };
+  const handleSave = () => {
+    if (!dirty) return;
+    updateTool.mutate({ id: tool.id, data: { name, description: desc } }, {
+      onSuccess: () => { setDirty(false); setSaved(true); setTimeout(() => setSaved(false), 2000); onSaved?.(); },
+    });
+  };
   const toggleStatus = () => {
-    const next = tool.status === "ready" ? "draft" : "ready";
+    const next = tool.status === "completed" ? "draft" : "completed";
     updateTool.mutate({ id: tool.id, data: { status: next } });
   };
 
@@ -78,18 +83,19 @@ function ToolCard({ tool }: { tool: AgentTool }) {
         <input
           className="font-mono text-sm font-semibold text-tedee-navy bg-transparent border-b border-transparent hover:border-gray-300 focus:border-tedee-cyan outline-none"
           value={name}
-          onChange={(e) => setName(e.target.value)}
-          onBlur={saveName}
+          onChange={(e) => { setName(e.target.value); setDirty(true); }}
+          onBlur={handleSave}
           onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
         />
         <div className="flex items-center gap-2">
+          {dirty && <button onClick={handleSave} className="text-[10px] px-1.5 py-0.5 rounded bg-tedee-cyan/20 text-tedee-navy font-medium">{saved ? "Saved!" : "Save"}</button>}
           {tool.is_write && (
             <span className="text-[10px] px-1.5 py-0.5 rounded bg-orange-100 text-orange-700 font-medium">WRITE</span>
           )}
           <button
             onClick={toggleStatus}
             className={`text-[10px] px-1.5 py-0.5 rounded font-medium cursor-pointer ${
-              tool.status === "ready" ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-600"
+              tool.status === "completed" ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"
             }`}
           >
             {tool.status}
@@ -105,8 +111,8 @@ function ToolCard({ tool }: { tool: AgentTool }) {
       <input
         className="w-full text-xs text-gray-500 bg-transparent border-b border-transparent hover:border-gray-300 focus:border-tedee-cyan outline-none mb-2"
         value={desc}
-        onChange={(e) => setDesc(e.target.value)}
-        onBlur={saveDesc}
+        onChange={(e) => { setDesc(e.target.value); setDirty(true); }}
+        onBlur={handleSave}
         onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
       />
       <div className="flex flex-wrap gap-1.5">
@@ -118,7 +124,7 @@ function ToolCard({ tool }: { tool: AgentTool }) {
       </div>
       {tool.use_case_ids && tool.use_case_ids.length > 0 && (
         <p className="text-[10px] text-gray-400 mt-2">
-          Covers use cases: {tool.use_case_ids.join(", ")}
+          Covers: {tool.use_case_ids.map((ucId) => useCaseNames[ucId] || ucId).join(", ")}
         </p>
       )}
     </div>
@@ -370,7 +376,12 @@ export default function OperatorDetail() {
                 <Link to={`/workbench/agents/${id}/usecases/${uc.id}`} className="font-medium text-sm text-tedee-navy hover:underline">{uc.name}</Link>
                 <div className="flex gap-1.5">
                   {uc.is_write && <span className="text-[10px] px-1.5 py-0.5 rounded bg-orange-100 text-orange-700 font-medium">WRITE</span>}
-                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-gray-100 text-gray-600 font-medium">{uc.status}</span>
+                  <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${
+                    uc.status === "completed" ? "bg-emerald-100 text-emerald-700" :
+                    uc.status === "tested" ? "bg-blue-100 text-blue-700" :
+                    uc.status === "discovered" ? "bg-blue-100 text-blue-700" :
+                    "bg-amber-100 text-amber-700"
+                  }`}>{uc.status}</span>
                 </div>
               </div>
               <p className="text-xs text-gray-500 mb-2">{uc.trigger_text || uc.description}</p>
@@ -396,25 +407,29 @@ export default function OperatorDetail() {
             {discoverToolsMut.isPending ? "Discovering..." : tools.length > 0 ? "Re-discover" : "Discover Tools"}
           </button>
         </div>
-        {tools.length > 0 ? (
-          <div className="space-y-2">
-            {tools.map((tool) => (
-              <ToolCard key={tool.id} tool={tool} />
-            ))}
-            <p className="text-xs text-gray-400 mt-2">
-              {tools.length} tool{tools.length !== 1 ? "s" : ""} &bull;{" "}
-              {tools.filter((t) => t.status === "ready").length} ready &bull;{" "}
-              {tools.filter((t) => t.status === "draft").length} draft &bull;{" "}
-              {new Set(tools.flatMap((t) => t.use_case_ids)).size} use case{new Set(tools.flatMap((t) => t.use_case_ids)).size !== 1 ? "s" : ""} covered
+        {(() => {
+          const ucNames: Record<string, string> = {};
+          for (const uc of useCases) ucNames[uc.id] = uc.name;
+          return tools.length > 0 ? (
+            <div className="space-y-2">
+              {tools.map((tool) => (
+                <ToolCard key={tool.id} tool={tool} useCaseNames={ucNames} />
+              ))}
+              <p className="text-xs text-gray-400 mt-2">
+                {tools.length} tool{tools.length !== 1 ? "s" : ""} &bull;{" "}
+                {tools.filter((t) => t.status === "completed").length} completed &bull;{" "}
+                {tools.filter((t) => t.status === "draft").length} draft &bull;{" "}
+                {new Set(tools.flatMap((t) => t.use_case_ids)).size} use case{new Set(tools.flatMap((t) => t.use_case_ids)).size !== 1 ? "s" : ""} covered
+              </p>
+            </div>
+          ) : (
+            <p className="text-sm text-gray-500 text-center py-3">
+              {useCases.filter((uc) => uc.status === "completed").length > 0
+                ? "Click 'Discover Tools' to generate MCP tool definitions from your completed use cases."
+                : "Complete use cases first (draft \u2192 discovered \u2192 tested \u2192 completed), then discover tools."}
             </p>
-          </div>
-        ) : (
-          <p className="text-sm text-gray-500 text-center py-3">
-            {useCases.filter((uc) => uc.status === "completed").length > 0
-              ? "Click 'Discover Tools' to generate MCP tool definitions from your completed use cases."
-              : "Complete use cases first (draft \u2192 discovered \u2192 tested \u2192 completed), then discover tools."}
-          </p>
-        )}
+          );
+        })()}
       </div>
 
       {/* Section D: Generation Config (collapsible) */}
