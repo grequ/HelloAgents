@@ -150,13 +150,24 @@ async def test_connection(agent_id: str):
     key_enc = await wb_db.get_agent_api_key_enc(agent_id)
     api_key = decrypt_api_key(key_enc) if key_enc else ""
     import httpx
-    headers = {}
-    if s.get("api_auth_type") == "bearer" and api_key:
-        headers["Authorization"] = f"Bearer {api_key}"
+
+    # Try multiple auth methods (same as test-url)
+    auth_attempts = [{}]
+    if api_key:
+        auth_attempts = [
+            {"Authorization": f"Bearer {api_key}"},
+            {"apikey": api_key},
+            {"X-Api-Key": api_key},
+            {"Api-Key": api_key},
+        ]
+
     try:
         async with httpx.AsyncClient(timeout=10.0) as http:
-            resp = await http.get(s["api_base_url"], headers=headers)
-        return {"ok": resp.status_code < 400, "status_code": resp.status_code}
+            for headers in auth_attempts:
+                resp = await http.get(s["api_base_url"], headers=headers)
+                if resp.status_code < 400:
+                    return {"ok": True, "status_code": resp.status_code}
+            return {"ok": False, "status_code": resp.status_code, "error": f"HTTP {resp.status_code}"}
     except Exception as e:
         return {"ok": False, "error": str(e)}
 
