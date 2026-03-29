@@ -170,6 +170,18 @@ export async function suggestUseCase(
   });
 }
 
+// Generate test input (AI-powered)
+export async function generateTestInput(data: {
+  endpoints: unknown[];
+  user_input: string;
+  behavior: string;
+  use_case_name: string;
+  agent_name: string;
+  base_url: string;
+}): Promise<Record<string, unknown>> {
+  return request<Record<string, unknown>>("POST", "/generate-test-input", data);
+}
+
 // Discover endpoints (AI-powered)
 export interface DiscoveredEndpoint {
   method: string;

@@ -224,6 +224,64 @@ async def fetch_url(body: dict):
         raise HTTPException(400, f"Failed to fetch URL: {e}")
 
 
+@router.post("/generate-test-input")
+async def generate_test_input(body: dict):
+    """AI generates realistic test input for a use case based on endpoints and context."""
+    import anthropic, os, re
+
+    endpoints = body.get("endpoints", [])
+    user_input = body.get("user_input", "")
+    behavior = body.get("behavior", "")
+    use_case_name = body.get("use_case_name", "")
+    agent_name = body.get("agent_name", "")
+    base_url = body.get("base_url", "")
+
+    ep_summary = "\n".join(
+        f"  {ep.get('method','GET')} {ep.get('path','')} — params: {json.dumps(ep.get('parameters',{}))}"
+        for ep in endpoints
+    )
+
+    client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
+    prompt = (
+        "Generate a realistic test input JSON object for this API use case.\n\n"
+        f"Agent: {agent_name}\n"
+        f"Base URL: {base_url}\n"
+        f"Use case: {use_case_name}\n"
+        f"User provides: {user_input}\n"
+        f"Agent behavior: {behavior}\n"
+        f"Endpoints:\n{ep_summary}\n\n"
+        "Rules:\n"
+        "- Return a single JSON object with realistic parameter values\n"
+        "- Use real-world example values (real phone numbers, real names, valid IDs)\n"
+        "- Match the parameter types from the endpoints (strings, integers, etc.)\n"
+        "- Include all required parameters\n"
+        "- Values should make sense for the API (e.g. country_code should be a real ISO country code like 'US', not 'sample')\n"
+        "- For phone numbers use a real format like '+14158586273'\n"
+        "- For IDs use small integers like 1, 5, 42\n"
+        "- For search queries use realistic terms\n\n"
+        "Return ONLY the JSON object, no explanation, no markdown."
+    )
+
+    response = client.messages.create(
+        model="claude-sonnet-4-20250514",
+        max_tokens=500,
+        messages=[{"role": "user", "content": prompt}],
+    )
+
+    text = response.content[0].text.strip()
+    text = re.sub(r'^```json\s*', '', text)
+    text = re.sub(r'\s*```$', '', text)
+
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        start = text.find("{")
+        end = text.rfind("}")
+        if start != -1 and end != -1:
+            return json.loads(text[start:end + 1])
+        return {"error": "Failed to generate test input"}
+
+
 @router.post("/discover-endpoints")
 async def discover_endpoints(body: dict):
     """AI-powered endpoint discovery from an API spec."""

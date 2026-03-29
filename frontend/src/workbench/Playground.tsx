@@ -6,7 +6,7 @@ import {
   useDiscover, useRunTest, useSaveDiscovery, useDeleteUseCase,
   useCompleteUseCase,
 } from "./queries";
-import { suggestUseCase } from "./api";
+import { suggestUseCase, generateTestInput } from "./api";
 import { btnPrimary, btnSecondary, btnDanger, btnGhost, btnGhostDanger, inp } from "./ui";
 
 const STAGES = ["draft", "discovered", "tested", "completed"] as const;
@@ -93,6 +93,7 @@ export default function Playground() {
   // Testing
   const [testInputStr, setTestInputStr] = useState("");
   const [testResult, setTestResult] = useState<Record<string, unknown> | null>(null);
+  const [generatingInput, setGeneratingInput] = useState(false);
 
   // Load use case definition fields only on first load (not on refetch after discovery)
   const ucLoadedRef = useRef(false);
@@ -484,34 +485,28 @@ export default function Playground() {
                   <h3 className="font-semibold text-text-primary text-sm">Live Test</h3>
                   {endpoints.length > 0 && (
                     <button className={btnGhost} onClick={async () => {
-                      // AI generates test input from endpoints + use case
+                      setGeneratingInput(true);
                       try {
-                        const suggestion = await suggestUseCase(agentId!, `Test: ${ucName}`,
-                          `Generate a realistic test input JSON for this use case.\nEndpoints: ${endpoints.map(e => `${e.method} ${e.path}`).join(", ")}\nUser provides: ${ucInput}\nBehavior: ${behavior}`);
-                        if (suggestion.trigger_text) {
-                          // Build test input from the suggestion context
-                          const obj: Record<string, unknown> = {};
-                          for (const ep of endpoints) {
-                            const params = ep.parameters || {};
-                            for (const [k, v] of Object.entries(params)) {
-                              if (typeof v === "string" && v.toLowerCase().includes("user")) {
-                                obj[k] = k === "number" ? "14158586273" : k === "id" ? 1 : k === "q" ? "test" : "sample";
-                              }
-                            }
-                          }
-                          if (Object.keys(obj).length === 0) {
-                            // Fallback: parse from user_input description
-                            const input = ucInput.toLowerCase();
-                            if (input.includes("number")) obj.number = "14158586273";
-                            else if (input.includes("id")) obj.id = 1;
-                            else if (input.includes("query") || input.includes("search")) obj.q = "test";
-                            else obj.input = "test";
-                          }
-                          setTestInputStr(JSON.stringify(obj, null, 2));
+                        const result = await generateTestInput({
+                          endpoints,
+                          user_input: ucInput,
+                          behavior,
+                          use_case_name: ucName,
+                          agent_name: agent?.name || "",
+                          base_url: agent?.api_base_url || "",
+                        });
+                        if (result && !result.error) {
+                          setTestInputStr(JSON.stringify(result, null, 2));
+                        } else {
+                          alert("Failed to generate: " + (result.error || "Unknown error"));
                         }
-                      } catch { /* ignore, keep existing input */ }
-                    }}>
-                      AI Suggest Input
+                      } catch (e: unknown) {
+                        alert("Failed: " + (e instanceof Error ? e.message : "Unknown error"));
+                      } finally {
+                        setGeneratingInput(false);
+                      }
+                    }} disabled={generatingInput}>
+                      {generatingInput ? "Generating..." : "Generate Test Input"}
                     </button>
                   )}
                 </div>
