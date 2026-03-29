@@ -22,6 +22,13 @@ from workbench.spec_generator import generate
 router = APIRouter(prefix="/workbench", tags=["workbench"])
 
 
+def _extract_ai_text(response) -> str:
+    """Safely extract text from Claude API response."""
+    if not response.content:
+        raise HTTPException(500, "Empty response from AI")
+    return response.content[0].text.strip()
+
+
 # ---- Dashboard ----
 
 @router.get("/dashboard")
@@ -268,7 +275,7 @@ async def generate_test_input(body: dict):
         messages=[{"role": "user", "content": prompt}],
     )
 
-    text = response.content[0].text.strip()
+    text = _extract_ai_text(response)
     text = re.sub(r'^```json\s*', '', text)
     text = re.sub(r'\s*```$', '', text)
 
@@ -333,7 +340,7 @@ async def discover_endpoints(body: dict):
         messages=[{"role": "user", "content": prompt}],
     )
 
-    text = response.content[0].text.strip()
+    text = _extract_ai_text(response)
     text = re.sub(r'^```json\s*', '', text)
     text = re.sub(r'\s*```$', '', text)
 
@@ -449,7 +456,7 @@ async def discover_tools(agent_id: str):
         messages=[{"role": "user", "content": prompt}],
     )
 
-    text = response.content[0].text.strip()
+    text = _extract_ai_text(response)
     text = re.sub(r'^```json\s*', '', text)
     text = re.sub(r'\s*```$', '', text)
 
@@ -523,8 +530,13 @@ async def complete_use_case(uc_id: str):
     uc = await wb_db.get_use_case(uc_id)
     if not uc:
         raise HTTPException(404, "Use case not found")
-    if uc.get("status") != "tested":
+    # Orchestrator use cases skip discovery/testing — allow completing from any non-completed status
+    agent = await wb_db.get_agent(uc["agent_id"]) if "agent_id" in uc else None
+    is_orchestrator = agent and agent.get("agent_role") == "orchestrator"
+    if not is_orchestrator and uc.get("status") != "tested":
         raise HTTPException(400, "Use case must be in 'tested' status to mark complete")
+    if uc.get("status") == "completed":
+        raise HTTPException(400, "Use case is already completed")
     updated = await wb_db.update_use_case(uc_id, {"status": "completed"})
     if not updated:
         raise HTTPException(500, "Failed to update use case")
@@ -596,7 +608,7 @@ async def suggest_use_case(body: dict):
         messages=[{"role": "user", "content": prompt}],
     )
 
-    text = response.content[0].text.strip()
+    text = _extract_ai_text(response)
     # Parse JSON (strip markdown fences if present)
     import re
     text = re.sub(r'^```json\s*', '', text)

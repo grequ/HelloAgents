@@ -86,6 +86,26 @@ export default function OrchestratorDetail() {
     return () => window.removeEventListener("beforeunload", handler);
   }, [dirty]);
 
+  const handleCancel = () => {
+    if (!confirm("Discard unsaved changes?")) return;
+    if (agent) {
+      const c = agent.agent_config;
+      setConfig({
+        agent_name: c?.agent_name || agent.name,
+        agent_persona: c?.agent_persona || "",
+        additional_context: c?.additional_context || "",
+      });
+    }
+    if (interactions) {
+      setConnectedOps(interactions.asks.map((a) => ({
+        target_agent_id: a.target_agent_id,
+        target_agent_name: a.target_agent_name,
+        use_case_ids: a.use_case_ids,
+      })));
+    }
+    setDirty(false);
+  };
+
   // Tools grouped by operator
   const toolsByOperator = new Map<string, { name: string; description: string }[]>();
   for (const tool of allTools) {
@@ -219,7 +239,7 @@ export default function OrchestratorDetail() {
           <button className={btnPrimary} onClick={handleSave} disabled={isSaving || !dirty}>
             {saved ? "Saved!" : dirty ? "\u25CF Save" : "Save"}
           </button>
-          {dirty && <button className={btnSecondary} onClick={() => window.location.reload()}>Cancel</button>}
+          {dirty && <button className={btnSecondary} onClick={handleCancel}>Cancel</button>}
           <button className={btnSecondary} onClick={handleGenerate} disabled={genSpec.isPending}>
             {genSpec.isPending ? "Generating..." : "Generate"}
           </button>
@@ -287,7 +307,7 @@ export default function OrchestratorDetail() {
                     </div>
                   </div>
                 ) : (
-                  <p className="text-xs text-gray-400">No tools discovered yet. Complete use cases and discover tools on this operator first.</p>
+                  <p className="text-xs text-gray-400">No tools discovered yet. Complete use cases and discover tools on this operator's detail page first.</p>
                 )}
               </div>
             );
@@ -324,12 +344,12 @@ export default function OrchestratorDetail() {
               </div>
               <p className="text-xs text-gray-500 mb-2">{uc.trigger_text || uc.description}</p>
               <div className="flex gap-2">
-                <Link to={`/workbench/agents/${id}/usecases/${uc.id}`} className={btnGhostCyan}>Open Playground</Link>
+                <Link to={`/workbench/agents/${id}/usecases/${uc.id}`} className={btnGhostCyan}>Open Use Case</Link>
                 <button className={btnGhostDanger} onClick={async () => { if (confirm("Delete this use case?")) await deleteUc.mutateAsync(uc.id); }}>Delete</button>
               </div>
             </div>
           ))}
-          {useCases.length === 0 && <p className="text-sm text-gray-500 py-4 text-center">No use cases yet. Define orchestration scenarios.</p>}
+          {useCases.length === 0 && <p className="text-sm text-gray-500 py-4 text-center">No use cases yet. Define how this orchestrator routes requests across operators.</p>}
         </div>
       </div>
     </div>

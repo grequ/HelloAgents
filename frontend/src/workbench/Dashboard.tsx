@@ -253,7 +253,7 @@ export default function Dashboard() {
                 <p className="text-xs text-gray-500 mb-3 line-clamp-2">{s.description || "No description"}</p>
                 <div className="flex flex-wrap gap-2 text-[11px] text-gray-400">
                   <span>{s.api_type}</span>
-                  <span>{s.use_case_count || 0} use cases</span>
+                  <span>{s.use_case_count || 0} use case{(s.use_case_count || 0) !== 1 ? "s" : ""}</span>
                   {s.has_api_spec && <span>API spec loaded</span>}
                   {s.has_api_key && <span>API key set</span>}
                 </div>
@@ -279,7 +279,7 @@ export default function Dashboard() {
                 </div>
                 <p className="text-xs text-gray-500 mb-3 line-clamp-2">{s.description || "No description"}</p>
                 <div className="flex flex-wrap gap-2 text-[11px] text-gray-400">
-                  <span>{s.use_case_count || 0} use cases</span>
+                  <span>{s.use_case_count || 0} use case{(s.use_case_count || 0) !== 1 ? "s" : ""}</span>
                 </div>
               </Link>
             ))}

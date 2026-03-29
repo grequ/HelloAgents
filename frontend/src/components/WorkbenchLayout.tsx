@@ -22,7 +22,7 @@ function pageTitle(pathname: string): string {
   if (pathname === "/workbench/settings") return "Organization Settings";
   if (pathname === "/workbench/demo") return "Customer Support Demo";
   if (pathname.includes("/specs")) return "Specs";
-  if (pathname.includes("/usecases")) return "Playground";
+  if (pathname.includes("/usecases")) return "Use Case";
   if (pathname.match(/\/agents\/[^/]+$/)) return "Agent";
   return "Workbench";
 }

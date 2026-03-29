@@ -192,4 +192,6 @@ Write a concise, helpful response using the data from the API results. If any ca
         max_tokens=500,
         messages=[{"role": "user", "content": prompt}],
     )
+    if not response.content:
+        return "(No response from AI)"
     return response.content[0].text

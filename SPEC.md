@@ -437,8 +437,8 @@ generate an MCP server implementation.
 
 **Orchestrators** progress through steps 1 → 2 → 3 → 5: inventory the
 orchestrator, connect it to operators and define behavior, define end-user use
-cases, and generate a Claude agent implementation. (Step 4 / Playground applies
-to operators only.)
+cases, and generate a Claude agent implementation. (Step 4 / Use Case discovery
+and testing applies to operators only.)
 
 ### Workbench Data Model
 
@@ -608,7 +608,7 @@ generation config.
 ┌────────────────────────────────────────────────────────────────┐
 │  Use Cases (8)                                   [+ Add Use Case]│
 │  (card list with priority/status/actions — click to open         │
-│   Playground at /workbench/agents/:id/usecases/:ucId)            │
+│   Use Case detail at /workbench/agents/:id/usecases/:ucId)       │
 └──────────────────────────────────────────────────────────────────┘
 ```
 
@@ -687,11 +687,13 @@ orchestrator can invoke. Tools are derived from the operator's use cases.
 connecting to each operator's MCP server, using the `tool_use` loop to
 coordinate across operators.
 
-#### Page 3: Use Case Detail + Agent Playground
+#### Page 3: Use Case Detail
 
 **Route:** `/workbench/agents/:id/usecases/:ucId`
 
-This is where the magic happens — self-discovery and live testing.
+For **operators**, this is the Use Case editor with self-discovery and live testing (two-column layout).
+For **orchestrators**, this is a focused single-column Use Case editor
+(no discovery, no testing) that goes straight from draft to completed.
 
 **Layout — 2 columns:**
 
@@ -845,7 +847,7 @@ view so a human can understand the full agent architecture.
 ```
 /workbench                              Dashboard (operators + orchestrators)
 /workbench/agents/:id                   Operator or Orchestrator detail (based on role)
-/workbench/agents/:id/usecases/:ucId    Playground
+/workbench/agents/:id/usecases/:ucId    Use Case detail (operator: with discovery+testing / orchestrator: definition only)
 /workbench/specs                        Generated specs list
 /workbench/specs/:id                    Spec detail/editor
 /workbench/map                          Agent architecture map
@@ -854,7 +856,7 @@ view so a human can understand the full agent architecture.
 
 ### Self-Discovery Engine
 
-The core intelligence of the Playground. When a user clicks **"Run Discovery"**,
+The core intelligence of the Use Case page. When a user clicks **"Run Discovery"**,
 the backend:
 
 1. Takes the **use case** (trigger, input, expected output) + **API spec** (OpenAPI JSON)
@@ -1081,7 +1083,7 @@ HelloAgents/
 │           ├── Dashboard.tsx    # Agent list + stats
 │           ├── OperatorDetail.tsx   # Operator: API connection + use cases + gen config
 │           ├── OrchestratorDetail.tsx # Orchestrator: connected operators + behavior + use cases
-│           ├── Playground.tsx   # Use case detail + discovery + live test
+│           ├── Playground.tsx   # Use case detail: operator (discovery + live test) / orchestrator (definition only)
 │           ├── AgentSpecList.tsx # List of generated specs
 │           ├── AgentSpecView.tsx # Spec review + export
 │           └── AgentMap.tsx     # Visual agent architecture map
@@ -1275,7 +1277,7 @@ python generate_agent_spec.py examples/logistics_usecases.yaml -o output/
 ### Phase 2 — Discovery
 5. API spec upload + parsing
 6. Self-discovery engine (Claude analyzes spec + use case)
-7. Playground UI (discovery panel)
+7. Use Case UI (discovery panel)
 
 ### Phase 3 — Testing
 8. API key storage with encryption

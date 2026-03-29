@@ -158,6 +158,8 @@ export default function OperatorDetail() {
       setDirty(false);
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
+    } catch (e: unknown) {
+      alert("Save failed: " + (e instanceof Error ? e.message : "Unknown error"));
     } finally {
       setSaving(false);
     }
@@ -411,7 +413,7 @@ export default function OperatorDetail() {
               </div>
               <p className="text-xs text-gray-500 mb-2">{uc.trigger_text || uc.description}</p>
               <div className="flex gap-2">
-                <Link to={`/workbench/agents/${id}/usecases/${uc.id}`} className={btnGhostCyan}>Open Playground</Link>
+                <Link to={`/workbench/agents/${id}/usecases/${uc.id}`} className={btnGhostCyan}>Open Use Case</Link>
                 <button className={btnGhostDanger} onClick={async () => { if (confirm("Delete this use case?")) await deleteUc.mutateAsync(uc.id); }}>Delete</button>
               </div>
             </div>

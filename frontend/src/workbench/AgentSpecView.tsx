@@ -86,6 +86,17 @@ export default function AgentSpecView() {
     setTimeout(() => setSaved(false), 2000);
   };
 
+  const handleCancel = () => {
+    if (!confirm("Discard unsaved changes?")) return;
+    if (spec) {
+      setSpecMd(spec.spec_markdown || "");
+      setToolsJson(JSON.stringify(spec.tools_json, null, 2) || "");
+      setPrompt(spec.system_prompt || "");
+      setCode(spec.skeleton_code || "");
+    }
+    setDirty(false);
+  };
+
   const handleDelete = async () => {
     if (!id || !confirm("Delete this agent spec permanently?")) return;
     await deleteSpecMut.mutateAsync(id);
@@ -116,7 +127,7 @@ export default function AgentSpecView() {
           <button className={btnPrimary} onClick={handleSave} disabled={!dirty || updateSpec.isPending}>
             {saved ? "Saved!" : dirty ? "\u25CF Save" : "Save"}
           </button>
-          {dirty && <button className={btnSecondary} onClick={() => window.location.reload()}>Cancel</button>}
+          {dirty && <button className={btnSecondary} onClick={handleCancel}>Cancel</button>}
           <button className={btnSecondary} onClick={handleCopyMarkdown}>
             {copied ? "Copied!" : "Copy .md"}
           </button>

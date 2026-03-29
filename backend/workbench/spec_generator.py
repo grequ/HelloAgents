@@ -558,6 +558,8 @@ async def _call_claude(prompt: str) -> str:
         max_tokens=16000,
         messages=[{"role": "user", "content": prompt}],
     )
+    if not response.content:
+        raise ValueError("Empty response from Claude")
     return _extract_text(response.content[0].text)
 
 
@@ -567,6 +569,8 @@ async def _call_claude_json(prompt: str) -> list:
         max_tokens=4000,
         messages=[{"role": "user", "content": prompt}],
     )
+    if not response.content:
+        raise ValueError("Empty response from Claude")
     text = _extract_text(response.content[0].text)
     try:
         return json.loads(text)

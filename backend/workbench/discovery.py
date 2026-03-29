@@ -69,10 +69,15 @@ Return ONLY valid JSON, no markdown fences."""
         messages=[{"role": "user", "content": prompt}],
     )
 
+    if not response.content:
+        raise ValueError("Empty response from AI discovery")
     text = response.content[0].text
     if "```json" in text:
         text = text.split("```json", 1)[1].split("```", 1)[0]
     elif "```" in text:
         text = text.split("```", 1)[1].split("```", 1)[0]
 
-    return json.loads(text)
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        raise ValueError(f"Failed to parse AI discovery response as JSON")
